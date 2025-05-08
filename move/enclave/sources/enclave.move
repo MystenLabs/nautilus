@@ -10,8 +10,11 @@ use std::string::String;
 use sui::ed25519;
 use sui::nitro_attestation::NitroAttestationDocument;
 
-const EInvalidPCRs: u64 = 0;
-const EInvalidConfigVersion: u64 = 1;
+const EInvalidWitness: u64 = 2;
+const EPcrMissmatch: u64 = 3;
+const ECannotBeOlder: u64 = 4;
+
+use fun to_pcrs as NitroAttestationDocument.to_pcrs;
 
 // The expected PCRs.
 // - We only define the first 3 PCRs. One can define other
@@ -19,25 +22,23 @@ const EInvalidConfigVersion: u64 = 1;
 //   of the config.
 // - See https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where
 //   for more information on PCRs.
-public struct EnclaveConfig<phantom T> has key {
-    id: UID,
-    name: String,
-    pcr0: vector<u8>, // Enclave image file
-    pcr1: vector<u8>, // Enclave Kernel
-    pcr2: vector<u8>, // Enclave application
-    version: u64,
-}
+
+public struct Pcrs(vector<u8>, vector<u8>, vector<u8>) has copy, drop, store;
 
 // A verified enclave instance, with its public key.
 public struct Enclave<phantom T> has key {
     id: UID,
+    name: String,
     pk: vector<u8>,
-    config_version: u64,
+    pcr: Pcrs,
+    version: u64,
+    latest_update_ms: u64,
 }
 
 // A capability to update the enclave config.
 public struct Cap<phantom T> has key, store {
     id: UID,
+    enclave_id: ID,
 }
 
 // An intent message, used for wrapping enclave messages.
@@ -47,63 +48,52 @@ public struct IntentMessage<T: drop> has copy, drop {
     payload: T,
 }
 
-fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
-    IntentMessage {
-        intent,
-        timestamp_ms,
-        payload,
-    }
-}
+public fun new<T: drop>(witness: T, name: String, ctx: &mut TxContext): Cap<T> {
+    assert!(sui::types::is_one_time_witness(&witness), EInvalidWitness);
 
-public fun create_enclave_config<T: drop>(
-    _witness: T,
-    name: String,
-    pcr0: vector<u8>,
-    pcr1: vector<u8>,
-    pcr2: vector<u8>,
-    ctx: &mut TxContext,
-): Cap<T> {
-    let enclave_config = EnclaveConfig<T> {
+    let enclave = Enclave<T> {
         id: object::new(ctx),
         name,
-        pcr0,
-        pcr1,
-        pcr2,
+        pk: vector[],
+        pcr: Pcrs(vector[], vector[], vector[]),
         version: 0,
+        latest_update_ms: 0,
     };
 
     let cap = Cap {
         id: object::new(ctx),
+        enclave_id: enclave.id.to_inner(),
     };
 
-    transfer::share_object(enclave_config);
+    transfer::share_object(enclave);
     cap
 }
 
-public fun register_enclave<T>(
-    enclave_config: &EnclaveConfig<T>,
+/// Admin's way of updating PCRs
+public fun update_pcrs<T>(
+    enclave: &mut Enclave<T>,
+    _cap: &Cap<T>,
     document: NitroAttestationDocument,
-    ctx: &mut TxContext,
 ) {
-    let pk = load_pk(document, enclave_config);
-    let enclave = Enclave<T> {
-        id: object::new(ctx),
-        pk,
-        config_version: enclave_config.version,
-    };
-    transfer::share_object(enclave);
+    enclave.pk = (*document.public_key()).destroy_some();
+    enclave.pcr = document.to_pcrs();
+    enclave.latest_update_ms = *document.timestamp();
+
+    // bump version!
+    enclave.version = enclave.version + 1;
 }
 
-fun load_pk<T>(document: NitroAttestationDocument, enclave_config: &EnclaveConfig<T>): vector<u8> {
-    let pcrs = document.pcrs();
-    assert!(pcrs[0].index() == 0, EInvalidPCRs);
-    assert!(pcrs[1].index() == 1, EInvalidPCRs);
-    assert!(pcrs[2].index() == 2, EInvalidPCRs);
-    assert!(pcrs[0].value() == enclave_config.pcr0, EInvalidPCRs);
-    assert!(pcrs[1].value() == enclave_config.pcr1, EInvalidPCRs);
-    assert!(pcrs[2].value() == enclave_config.pcr2, EInvalidPCRs);
+/// Update public key publicly.
+public fun update_pk<T>(enclave: &mut Enclave<T>, document: NitroAttestationDocument) {
+    assert!(enclave.pcr == document.to_pcrs(), EPcrMissmatch);
+    assert!(enclave.latest_update_ms < *document.timestamp(), ECannotBeOlder);
 
-    option::destroy_some(*document.public_key())
+    enclave.pk = (*document.public_key()).destroy_some();
+}
+
+fun to_pcrs(document: &NitroAttestationDocument): Pcrs {
+    let pcrs = document.pcrs();
+    Pcrs(*pcrs[0].value(), *pcrs[1].value(), *pcrs[2].value())
 }
 
 public fun verify_signature<T, P: drop>(
@@ -113,60 +103,37 @@ public fun verify_signature<T, P: drop>(
     payload: P,
     signature: &vector<u8>,
 ): bool {
-    let intent_message = create_intent_message(intent_scope, timestamp_ms, payload);
+    let intent_message = new_intent_message(intent_scope, timestamp_ms, payload);
     let payload = bcs::to_bytes(&intent_message);
     return ed25519::ed25519_verify(signature, &enclave.pk, &payload)
 }
 
-public fun update_pcrs<T: drop>(
-    config: &mut EnclaveConfig<T>,
-    _cap: &Cap<T>,
-    pcr0: vector<u8>,
-    pcr1: vector<u8>,
-    pcr2: vector<u8>,
-) {
-    config.pcr0 = pcr0;
-    config.pcr1 = pcr1;
-    config.pcr2 = pcr2;
-    config.version = config.version + 1;
+public fun update_name<T: drop>(enclave: &mut Enclave<T>, _cap: &Cap<T>, name: String) {
+    enclave.name = name;
 }
 
-public fun update_name<T: drop>(config: &mut EnclaveConfig<T>, _cap: &Cap<T>, name: String) {
-    config.name = name;
+public fun pcr0<T>(config: &Enclave<T>): &vector<u8> {
+    &config.pcr.0
 }
 
-public fun pcr0<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr0
+public fun pcr1<T>(config: &Enclave<T>): &vector<u8> {
+    &config.pcr.1
 }
 
-public fun pcr1<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr1
-}
-
-public fun pcr2<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr2
+public fun pcr2<T>(config: &Enclave<T>): &vector<u8> {
+    &config.pcr.2
 }
 
 public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
 }
 
-public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
-    assert!(e.config_version < config.version, EInvalidConfigVersion);
-    let Enclave { id, .. } = e;
-    object::delete(id);
-}
-
-#[test_only]
-public fun destroy_cap<T>(c: Cap<T>) {
-    let Cap { id, .. } = c;
-    object::delete(id);
-}
-
-#[test_only]
-public fun destroy_enclave<T>(e: Enclave<T>) {
-    let Enclave { id, .. } = e;
-    object::delete(id);
+fun new_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
+    IntentMessage {
+        intent,
+        timestamp_ms,
+        payload,
+    }
 }
 
 #[test_only]
@@ -178,15 +145,13 @@ public struct SigningPayload has copy, drop {
 #[test]
 fun test_serde() {
     // serialization should be consistent with rust test see `fn test_serde` in `src/nautilus-server/app.rs`.
-    use std::string;
-
     let scope = 0;
     let timestamp = 1744038900000;
-    let signing_payload = create_intent_message(
+    let signing_payload = new_intent_message(
         scope,
         timestamp,
         SigningPayload {
-            location: string::utf8(b"San Francisco"),
+            location: b"San Francisco".to_string(),
             temperature: 13,
         },
     );
