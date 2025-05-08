@@ -22,7 +22,6 @@ use fun to_pcrs as NitroAttestationDocument.to_pcrs;
 //   of the config.
 // - See https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where
 //   for more information on PCRs.
-
 public struct Pcrs(vector<u8>, vector<u8>, vector<u8>) has copy, drop, store;
 
 // A verified enclave instance, with its public key.
@@ -91,11 +90,6 @@ public fun update_pk<T>(enclave: &mut Enclave<T>, document: NitroAttestationDocu
     enclave.pk = (*document.public_key()).destroy_some();
 }
 
-fun to_pcrs(document: &NitroAttestationDocument): Pcrs {
-    let pcrs = document.pcrs();
-    Pcrs(*pcrs[0].value(), *pcrs[1].value(), *pcrs[2].value())
-}
-
 public fun verify_signature<T, P: drop>(
     enclave: &Enclave<T>,
     intent_scope: u8,
@@ -112,20 +106,17 @@ public fun update_name<T: drop>(enclave: &mut Enclave<T>, _cap: &Cap<T>, name: S
     enclave.name = name;
 }
 
-public fun pcr0<T>(config: &Enclave<T>): &vector<u8> {
-    &config.pcr.0
-}
-
-public fun pcr1<T>(config: &Enclave<T>): &vector<u8> {
-    &config.pcr.1
-}
-
-public fun pcr2<T>(config: &Enclave<T>): &vector<u8> {
-    &config.pcr.2
+public fun pcrs<T>(enclave: &Enclave<T>): (vector<u8>, vector<u8>, vector<u8>) {
+    (enclave.pcr.0, enclave.pcr.1, enclave.pcr.2)
 }
 
 public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
+}
+
+fun to_pcrs(document: &NitroAttestationDocument): Pcrs {
+    let pcrs = document.pcrs();
+    Pcrs(*pcrs[0].value(), *pcrs[1].value(), *pcrs[2].value())
 }
 
 fun new_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {

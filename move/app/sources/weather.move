@@ -32,10 +32,10 @@ public struct WEATHER has drop {}
 fun init(otw: WEATHER, ctx: &mut TxContext) {
     let cap = enclave::new(
         otw,
-        std::string::utf8(b"weather enclave"),
+        b"weather enclave".to_string(),
         ctx,
     );
-    transfer::public_transfer(cap, tx_context::sender(ctx))
+    transfer::public_transfer(cap, ctx.sender())
 }
 
 public fun update_weather<T>(
@@ -46,13 +46,13 @@ public fun update_weather<T>(
     enclave: &Enclave<T>,
     ctx: &mut TxContext,
 ): WeatherNFT {
-    let res = enclave.verify_signature(
+    let is_valid_signature = enclave.verify_signature(
         WEATHER_INTENT,
         timestamp_ms,
         WeatherResponse { location, temperature },
         sig,
     );
-    assert!(res, EInvalidSignature);
+    assert!(is_valid_signature, EInvalidSignature);
     // Mint NFT, replace it with your own logic.
     WeatherNFT {
         id: object::new(ctx),
@@ -93,7 +93,7 @@ fun test_weather_flow() {
         x"77b6d8be225440d00f3d6eb52e91076a8927cebfb520e58c19daf31ecf06b3798ec3d3ce9630a9eceee46d24f057794a60dd781657cb06d952269cfc5ae19500";
 
     let nft = update_weather(
-        std::string::utf8(b"San Francisco"),
+        b"San Francisco".to_string(),
         13,
         1744683300000,
         &sig,
