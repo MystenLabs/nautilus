@@ -36,3 +36,8 @@ run-debug: out/nitro.eif
 		--eif-path out/nitro.eif \
 		--debug-mode \
 		--attach-console
+
+.PHONY: update
+update:
+	./update.sh
+
