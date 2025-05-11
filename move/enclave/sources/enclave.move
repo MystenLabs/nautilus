@@ -10,8 +10,14 @@ use std::string::String;
 use sui::ed25519;
 use sui::nitro_attestation::NitroAttestationDocument;
 
+use fun to_pcrs as NitroAttestationDocument.to_pcrs;
+
+/// There's a missmatch between
 const EInvalidPCRs: u64 = 0;
 const EInvalidConfigVersion: u64 = 1;
+const EInvalidCap: u64 = 2;
+
+public struct Pcrs(vector<u8>, vector<u8>, vector<u8>) has copy, drop, store;
 
 // The expected PCRs.
 // - We only define the first 3 PCRs. One can define other
@@ -22,9 +28,8 @@ const EInvalidConfigVersion: u64 = 1;
 public struct EnclaveConfig<phantom T> has key {
     id: UID,
     name: String,
-    pcr0: vector<u8>, // Enclave image file
-    pcr1: vector<u8>, // Enclave Kernel
-    pcr2: vector<u8>, // Enclave application
+    pcrs: Pcrs,
+    capability_id: ID,
     version: u64,
 }
 
@@ -32,6 +37,7 @@ public struct EnclaveConfig<phantom T> has key {
 public struct Enclave<phantom T> has key {
     id: UID,
     pk: vector<u8>,
+    capability_id: ID,
     config_version: u64,
 }
 
@@ -47,37 +53,30 @@ public struct IntentMessage<T: drop> has copy, drop {
     payload: T,
 }
 
-fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
-    IntentMessage {
-        intent,
-        timestamp_ms,
-        payload,
+/// Create a new `Cap` using a `witness` T from a module.
+public fun new_cap<T: drop>(_: T, ctx: &mut TxContext): Cap<T> {
+    Cap {
+        id: object::new(ctx),
     }
 }
 
 public fun create_enclave_config<T: drop>(
-    _witness: T,
+    cap: &Cap<T>,
     name: String,
     pcr0: vector<u8>,
     pcr1: vector<u8>,
     pcr2: vector<u8>,
     ctx: &mut TxContext,
-): Cap<T> {
+) {
     let enclave_config = EnclaveConfig<T> {
         id: object::new(ctx),
         name,
-        pcr0,
-        pcr1,
-        pcr2,
+        pcrs: Pcrs(pcr0, pcr1, pcr2),
+        capability_id: cap.id.to_inner(),
         version: 0,
     };
 
-    let cap = Cap {
-        id: object::new(ctx),
-    };
-
     transfer::share_object(enclave_config);
-    cap
 }
 
 public fun register_enclave<T>(
@@ -85,25 +84,16 @@ public fun register_enclave<T>(
     document: NitroAttestationDocument,
     ctx: &mut TxContext,
 ) {
-    let pk = load_pk(document, enclave_config);
+    let pk = enclave_config.load_pk(&document);
+
     let enclave = Enclave<T> {
         id: object::new(ctx),
         pk,
+        capability_id: enclave_config.capability_id,
         config_version: enclave_config.version,
     };
+
     transfer::share_object(enclave);
-}
-
-fun load_pk<T>(document: NitroAttestationDocument, enclave_config: &EnclaveConfig<T>): vector<u8> {
-    let pcrs = document.pcrs();
-    assert!(pcrs[0].index() == 0, EInvalidPCRs);
-    assert!(pcrs[1].index() == 1, EInvalidPCRs);
-    assert!(pcrs[2].index() == 2, EInvalidPCRs);
-    assert!(pcrs[0].value() == enclave_config.pcr0, EInvalidPCRs);
-    assert!(pcrs[1].value() == enclave_config.pcr1, EInvalidPCRs);
-    assert!(pcrs[2].value() == enclave_config.pcr2, EInvalidPCRs);
-
-    option::destroy_some(*document.public_key())
 }
 
 public fun verify_signature<T, P: drop>(
@@ -120,53 +110,74 @@ public fun verify_signature<T, P: drop>(
 
 public fun update_pcrs<T: drop>(
     config: &mut EnclaveConfig<T>,
-    _cap: &Cap<T>,
+    cap: &Cap<T>,
     pcr0: vector<u8>,
     pcr1: vector<u8>,
     pcr2: vector<u8>,
 ) {
-    config.pcr0 = pcr0;
-    config.pcr1 = pcr1;
-    config.pcr2 = pcr2;
+    cap.assert_is_valid_for_config(config);
+    config.pcrs = Pcrs(pcr0, pcr1, pcr2);
     config.version = config.version + 1;
 }
 
-public fun update_name<T: drop>(config: &mut EnclaveConfig<T>, _cap: &Cap<T>, name: String) {
+public fun update_name<T: drop>(config: &mut EnclaveConfig<T>, cap: &Cap<T>, name: String) {
+    cap.assert_is_valid_for_config(config);
     config.name = name;
 }
 
 public fun pcr0<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr0
+    &config.pcrs.0
 }
 
 public fun pcr1<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr1
+    &config.pcrs.1
 }
 
 public fun pcr2<T>(config: &EnclaveConfig<T>): &vector<u8> {
-    &config.pcr2
+    &config.pcrs.2
 }
 
 public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
 }
 
+public fun destroy<T>(enclave: Enclave<T>, cap: &Cap<T>) {
+    cap.assert_is_valid_for(&enclave);
+    let Enclave { id, .. } = enclave;
+    id.delete();
+}
+
 public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
     assert!(e.config_version < config.version, EInvalidConfigVersion);
     let Enclave { id, .. } = e;
-    object::delete(id);
+    id.delete();
 }
 
-#[test_only]
-public fun destroy_cap<T>(c: Cap<T>) {
-    let Cap { id, .. } = c;
-    object::delete(id);
+fun assert_is_valid_for_config<T>(cap: &Cap<T>, enclave_config: &EnclaveConfig<T>) {
+    assert!(cap.id.to_inner() == enclave_config.capability_id, EInvalidCap);
 }
 
-#[test_only]
-public fun destroy_enclave<T>(e: Enclave<T>) {
-    let Enclave { id, .. } = e;
-    object::delete(id);
+fun assert_is_valid_for<T>(cap: &Cap<T>, enclave: &Enclave<T>) {
+    assert!(cap.id.to_inner() == enclave.capability_id, EInvalidCap);
+}
+
+fun load_pk<T>(enclave_config: &EnclaveConfig<T>, document: &NitroAttestationDocument): vector<u8> {
+    assert!(document.to_pcrs() == enclave_config.pcrs, EInvalidPCRs);
+
+    (*document.public_key()).destroy_some()
+}
+
+fun to_pcrs(document: &NitroAttestationDocument): Pcrs {
+    let pcrs = document.pcrs();
+    Pcrs(*pcrs[0].value(), *pcrs[1].value(), *pcrs[2].value())
+}
+
+fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
+    IntentMessage {
+        intent,
+        timestamp_ms,
+        payload,
+    }
 }
 
 #[test_only]
@@ -178,15 +189,13 @@ public struct SigningPayload has copy, drop {
 #[test]
 fun test_serde() {
     // serialization should be consistent with rust test see `fn test_serde` in `src/nautilus-server/app.rs`.
-    use std::string;
-
     let scope = 0;
     let timestamp = 1744038900000;
     let signing_payload = create_intent_message(
         scope,
         timestamp,
         SigningPayload {
-            location: string::utf8(b"San Francisco"),
+            location: b"San Francisco".to_string(),
             temperature: 13,
         },
     );
