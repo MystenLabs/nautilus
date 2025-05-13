@@ -17,6 +17,9 @@ const EInvalidPCRs: u64 = 0;
 const EInvalidConfigVersion: u64 = 1;
 const EInvalidCap: u64 = 2;
 
+// PCR0: Enclave image file
+// PCR1: Enclave Kernel
+// PCR2: Enclave application
 public struct Pcrs(vector<u8>, vector<u8>, vector<u8>) has copy, drop, store;
 
 // The expected PCRs.
