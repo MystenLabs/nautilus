@@ -207,7 +207,7 @@ sui move build
 sui client publish
 
 # record ENCLAVE_PACKAGE_ID as env var from publish output
-ENCLAVE_PACKAGE_ID=0xd896ab3f7dfb2390952d10e0e63a9a6fd63ab53ec0e2f85f557f1e530a8696d3
+ENCLAVE_PACKAGE_ID=0x14e8b4d8b28ee9aa5ea604f3f33969b3d0f03247b51837f27e17bcf875d3582c
 
 # deploy your dapp logic
 cd ../app
@@ -216,9 +216,9 @@ sui client publish
 
 # record CAP_OBJECT_ID (owned object of type Cap), ENCLAVE_CONFIG_OBJECT_ID (shared object), EXAMPLES_PACKAGE_ID (package containing weather module) as env var from publish output
 
-CAP_OBJECT_ID=0x2ef9ed9e1d855e616eee07af0eaa4dfe07d2e0d062f2928203f559489275eb10
-ENCLAVE_CONFIG_OBJECT_ID=0x49f658245333f5836c5c9c8b835dee4923794b298afaed923dd2bba6d937a222
-EXAMPLES_PACKAGE_ID=0xcb34b74ec1a935493f7117f4f09b6f882d91cea0a7e3e1644ca0240cb24e4dc1
+CAP_OBJECT_ID=0xb157d241cc00b7a9b8b0f11d0b4c3e11d8334be95f7e50240962611bd802abff
+ENCLAVE_CONFIG_OBJECT_ID=0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d
+EXAMPLES_PACKAGE_ID=0x7e712fd9e5e57d87137440cfea77dc7970575a5c3229d78bb7176ab984d94adf
 
 # record the deployed enclave url, e.g. http://<PUBLIC_IP>:3000
 ENCLAVE_URL=<DEPLOYED_URL>
