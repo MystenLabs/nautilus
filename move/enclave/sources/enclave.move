@@ -12,10 +12,10 @@ use sui::nitro_attestation::NitroAttestationDocument;
 
 use fun to_pcrs as NitroAttestationDocument.to_pcrs;
 
-/// There's a missmatch between
 const EInvalidPCRs: u64 = 0;
 const EInvalidConfigVersion: u64 = 1;
 const EInvalidCap: u64 = 2;
+const EInvalidOwner: u64 = 3;
 
 // PCR0: Enclave image file
 // PCR1: Enclave Kernel
@@ -42,6 +42,7 @@ public struct Enclave<phantom T> has key {
     pk: vector<u8>,
     capability_id: ID,
     config_version: u64,
+    owner: address,
 }
 
 // A capability to update the enclave config.
@@ -94,6 +95,7 @@ public fun register_enclave<T>(
         pk,
         capability_id: enclave_config.capability_id,
         config_version: enclave_config.version,
+        owner: ctx.sender(),
     };
 
     transfer::share_object(enclave);
@@ -152,6 +154,12 @@ public fun destroy<T>(enclave: Enclave<T>, cap: &Cap<T>) {
 
 public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
     assert!(e.config_version < config.version, EInvalidConfigVersion);
+    let Enclave { id, .. } = e;
+    id.delete();
+}
+
+public fun deploy_old_enclave_by_owner<T>(e: Enclave<T>, ctx: &mut TxContext) {
+    assert!(e.owner == ctx.sender(), EInvalidOwner);
     let Enclave { id, .. } = e;
     id.delete();
 }
