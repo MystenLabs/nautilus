@@ -40,7 +40,6 @@ public struct EnclaveConfig<phantom T> has key {
 public struct Enclave<phantom T> has key {
     id: UID,
     pk: vector<u8>,
-    capability_id: ID,
     config_version: u64,
     owner: address,
 }
@@ -93,7 +92,6 @@ public fun register_enclave<T>(
     let enclave = Enclave<T> {
         id: object::new(ctx),
         pk,
-        capability_id: enclave_config.capability_id,
         config_version: enclave_config.version,
         owner: ctx.sender(),
     };
@@ -146,12 +144,6 @@ public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
 }
 
-public fun destroy<T>(enclave: Enclave<T>, cap: &Cap<T>) {
-    cap.assert_is_valid_for(&enclave);
-    let Enclave { id, .. } = enclave;
-    id.delete();
-}
-
 public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
     assert!(e.config_version < config.version, EInvalidConfigVersion);
     let Enclave { id, .. } = e;
@@ -166,10 +158,6 @@ public fun deploy_old_enclave_by_owner<T>(e: Enclave<T>, ctx: &mut TxContext) {
 
 fun assert_is_valid_for_config<T>(cap: &Cap<T>, enclave_config: &EnclaveConfig<T>) {
     assert!(cap.id.to_inner() == enclave_config.capability_id, EInvalidCap);
-}
-
-fun assert_is_valid_for<T>(cap: &Cap<T>, enclave: &Enclave<T>) {
-    assert!(cap.id.to_inner() == enclave.capability_id, EInvalidCap);
 }
 
 fun load_pk<T>(enclave_config: &EnclaveConfig<T>, document: &NitroAttestationDocument): vector<u8> {
@@ -189,6 +177,12 @@ fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): I
         timestamp_ms,
         payload,
     }
+}
+
+#[test_only]
+public fun destroy<T>(enclave: Enclave<T>) {
+    let Enclave { id, .. } = enclave;
+    id.delete();
 }
 
 #[test_only]

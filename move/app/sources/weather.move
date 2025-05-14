@@ -122,7 +122,7 @@ fun test_weather_flow() {
     sui::transfer::public_transfer(nft, scenario.ctx().sender());
     test_scenario::return_shared(config);
     clock.destroy_for_testing();
-    enclave.destroy(&cap);
+    enclave.destroy();
     destroy(cap);
     scenario.end();
 }
