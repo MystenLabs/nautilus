@@ -49,6 +49,9 @@ AMI_ID="${AMI_ID:-ami-085ad6ae776d8f09c}"
 # Environment variable name for our secret; default is 'API_KEY'
 API_ENV_VAR_NAME="${API_ENV_VAR_NAME:-API_KEY}"
 
+EXAMPLE="${EXAMPLE:-weather}"  # default weather example
+ALLOWLIST_PATH="src/examples/${EXAMPLE}/allowed_endpoints.yaml"
+
 ############################
 # Cleanup Old Files
 ############################
@@ -63,7 +66,6 @@ if [ -z "$KEY_PAIR" ]; then
     echo "Error: Environment variable KEY_PAIR is not set. Please export KEY_PAIR=<your-key-name>."
     exit 1
 fi
-
 # Check if yq is available
 if ! command -v yq >/dev/null 2>&1; then
   echo "Error: yq is not installed."
@@ -93,11 +95,11 @@ echo "Instance will be named: $FINAL_INSTANCE_NAME"
 #########################################
 # Read endpoints from allowed_endpoints.yaml
 #########################################
-if [ -f "src/nautilus-server/allowed_endpoints.yaml" ]; then
+if [ -f "$ALLOWLIST_PATH" ]; then
     # Use a small Python snippet to parse the YAML and emit space-separated endpoints
-    ENDPOINTS=$(yq e '.endpoints | join(" ")' src/nautilus-server/allowed_endpoints.yaml 2>/dev/null)
+    ENDPOINTS=$(yq e '.endpoints | join(" ")' $ALLOWLIST_PATH 2>/dev/null)
     if [ -n "$ENDPOINTS" ]; then
-        echo "Endpoints found in src/nautilus-server/allowed_endpoints.yaml (before region patching):"
+        echo "Endpoints found in $ALLOWLIST_PATH (before region patching):"
         echo "$ENDPOINTS"
 
         # Replace any existing region (like us-east-1, us-west-2, etc.) in kms.* / secretsmanager.* with the user-provided $REGION.
@@ -108,10 +110,10 @@ if [ -f "src/nautilus-server/allowed_endpoints.yaml" ]; then
         echo "Endpoints after region patching:"
         echo "$ENDPOINTS"
     else
-        echo "No endpoints found in src/nautilus-server/allowed_endpoints.yaml. Continuing without additional endpoints."
+        echo "No endpoints found in $ALLOWLIST_PATH. Continuing without additional endpoints."
     fi
 else
-    echo "src/nautilus-server/allowed_endpoints.yaml not found. Continuing without additional endpoints."
+    echo "$ALLOWLIST_PATH not found. Continuing without additional endpoints."
     ENDPOINTS=""
 fi
 

@@ -1,4 +1,6 @@
 REGISTRY := local
+EXAMPLE ?= weather
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: out/enclaveos.tar
@@ -18,6 +20,7 @@ out/enclaveos.tar: out \
 		--platform linux/amd64 \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
+		--build-arg EXAMPLE=$(EXAMPLE) \
 		.
 
 .PHONY: run

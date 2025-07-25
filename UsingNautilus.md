@@ -37,20 +37,27 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
 
 ```shell
 /move
-  /enclave          Utility functions to create an enclave config and register public key by providing a valid attestation document.
-  /app              Application logic, uses functions in enclave directory. Replace this with your Nautilus application onchain logic.
+  /enclave          Use without modification. Utility functions to create an enclave config and register public key by providing a valid attestation document.
+  /weather          Application logic, uses functions in enclave directory. Replace this with your Nautilus application onchain logic.
+  /twitter          Another example. 
 /src
-  /aws              AWS boilerplate
-  /init             AWS boilerplate
-  /system           AWS boilerplate
+  /aws              Use without modification. AWS boilerplate.
+  /init             Use without modification. AWS boilerplate.
+  /system           Use without modification. AWS boilerplate.
   /nautilus-server  Nautilus server that runs inside the enclave.
-    run.sh          Configures all necessary domains and traffic forwarder, then runs the Rust server inside the enclave.
-    app.rs          Replace this with your offchain computation logic.
-    common.rs       Common code for getting attestation.
-    allowed_endpoints.yaml  This file lists all endpoints the enclave is allowed to access. By default, the enclave has no internet access unless the parent EC2 instance explicitly forwards traffic. During the configuration step, this file is used to generate the necessary code to enable limited traffic forwarding from the enclave. 
+    /src
+      /examples
+        /weather  Example. Add another directory and replace it with your own app. 
+          mod.rs  The process_data endpoints and its artifacts for fetching weather. Replace this with your offchain computation logic for process_data.
+          allowed_endpoints.yaml  This file lists all endpoints the enclave is allowed to access. By default, the enclave has no internet access unless the parent EC2 instance explicitly forwards traffic. During the configuration step, this file is used to generate the necessary code to enable limited traffic forwarding from the enclave. 
+        /twitter  Another example. 
+          mod.rs
+          allowed_endpoints.yaml
+    run.sh          Use without modification. Configures all necessary domains and traffic forwarder, then runs the Rust server inside the enclave.
+    common.rs       Use without modification. Common code for getting attestation.
 ```
 
-As a developer, focus on implementing the Move code in `move/app` and the Rust code in `src/nautilus-server/app.rs`, along with the frontend logic that interacts with the deployed smart contract. You’ll also need to edit `allowed_endpoints.yaml` to include all domains the enclave must access. 
+As a developer, create your own app by creating a directory in `move/your_app` and in `src/nautilus-server/src/your_app`. Refer to other directories for example. Also create your own frontend logic that interacts with the deployed smart contract and deployed Rust server. 
 
 The rest of the template can remain largely unmodified. 
 
