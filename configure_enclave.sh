@@ -50,7 +50,7 @@ AMI_ID="${AMI_ID:-ami-085ad6ae776d8f09c}"
 API_ENV_VAR_NAME="${API_ENV_VAR_NAME:-API_KEY}"
 
 EXAMPLE="${EXAMPLE:-weather}"  # default weather example
-ALLOWLIST_PATH="src/examples/${EXAMPLE}/allowed_endpoints.yaml"
+ALLOWLIST_PATH="src/nautilus-server/src/examples/${EXAMPLE}/allowed_endpoints.yaml"
 
 ############################
 # Cleanup Old Files
