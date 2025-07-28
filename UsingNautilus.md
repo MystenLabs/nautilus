@@ -310,7 +310,7 @@ This design allows the admin to run multiple instances of the same enclave with 
 
 ### Update PCRs
 
-The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the section above.
+The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make EXAMPLE=<EXAMPLE> && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the section above.
 
 ## Using the verified computation in Move
 

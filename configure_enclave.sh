@@ -151,6 +151,11 @@ if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
           --secret-string "$SECRET_VALUE" \
           --region "$REGION" \
           --query 'ARN' --output text)
+        if [ $? -ne 0 ] || [ -z "$SECRET_ARN" ]; then
+            echo "Failed to create secret '$SECRET_NAME'."
+            echo "Make sure AWS credentials are configured, e.g. AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN."
+            exit 1
+        fi
         echo "Secret created with ARN: $SECRET_ARN"
 
         # Create IAM Role, Policy, and Instance Profile for Secret Access
