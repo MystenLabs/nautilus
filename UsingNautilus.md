@@ -201,17 +201,6 @@ PCR1=6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed8848
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 ```
 
-For the Twitter example
-```
-cd nautilus/
-make EXAMPLE=twitter
-
-cat out/nitro.pcrs
-6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c PCR0
-6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c PCR1
-21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
-
-```
 ## Register the enclave onchain
 
 After finalizing the Rust code, the Dapp administrator can register the enclave with the corresponding PCRs and public key.
@@ -278,6 +267,40 @@ ENCLAVE_OBJECT_ID=0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c
 ```
 
 You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d).
+
+The Twitter example artifacts can be found below: 
+
+```
+cd nautilus/
+make EXAMPLE=twitter
+
+cat out/nitro.pcrs
+c2612813895f2696dd4468cc28b8a7d6fb5c2d34d93dcbaeeb953f1f2f395e4f4eded80520b4bc60ea5027c28be4f3a1 PCR0
+c2612813895f2696dd4468cc28b8a7d6fb5c2d34d93dcbaeeb953f1f2f395e4f4eded80520b4bc60ea5027c28be4f3a1 PCR1
+21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
+
+# Add env var that will be used later when registering the enclave.
+PCR0=c2612813895f2696dd4468cc28b8a7d6fb5c2d34d93dcbaeeb953f1f2f395e4f4eded80520b4bc60ea5027c28be4f3a1
+PCR1=c2612813895f2696dd4468cc28b8a7d6fb5c2d34d93dcbaeeb953f1f2f395e4f4eded80520b4bc60ea5027c28be4f3a1
+PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+
+MODULE_NAME=twitter
+OTW_NAME=TWITTER
+
+# replace with your registered enclave
+EXAMPLES_PACKAGE_ID=0xc0c1b892b4db559625c0bb540fa15a243a65ccaa5584e379ed0361cf3027297b
+ENCLAVE_PACKAGE_ID=0xddd58ea9795270f3cb4fe75b55c3f69e182c270f2dff783ef8c489a8282c35ac
+CAP_OBJECT_ID=0xcae6faa354249fc450a3b4c84471cddd37280fd01a17b387a4fda3c2b3b80041
+ENCLAVE_CONFIG_OBJECT_ID=0xe13cbe215b1b63b7aa4a41d5cf3b5ede1ae0cb1c50bb66d42673c51971da8322
+ENCLAVE_OBJECT_ID=0xb2d9fbb9159f1e30f2b590346ca16b0d3401899476ecd3f4723531e1fc078b17
+
+# replace with your own enclave IP
+ENCLAVE_URL=http://<PUBLIC_IP>:3000
+```
+
+You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0xe13cbe215b1b63b7aa4a41d5cf3b5ede1ae0cb1c50bb66d42673c51971da8322). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0xcaf02353da4dee02156fa77ac9f189fb5416e64b8d5433d2d61e1fb6307c790e).
+
+The Twitter example frontend code can be found [here](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
 
 ### Enclave management
 
