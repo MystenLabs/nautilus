@@ -49,7 +49,7 @@ AMI_ID="${AMI_ID:-ami-085ad6ae776d8f09c}"
 # Environment variable name for our secret; default is 'API_KEY'
 API_ENV_VAR_NAME="${API_ENV_VAR_NAME:-API_KEY}"
 
-EXAMPLE="${EXAMPLE:-weather}"  # default weather example
+EXAMPLE="${1:-${EXAMPLE:-weather}}" # defaults to weather
 ALLOWLIST_PATH="src/nautilus-server/src/examples/${EXAMPLE}/allowed_endpoints.yaml"
 
 ############################
@@ -572,5 +572,5 @@ echo "[*] Commit the code generated in expose_enclave.sh and src/nautilus-server
 echo "[*] Please wait 2-3 minutes for the instance to finish the init script before sshing into it."
 echo "[*] ssh inside the launched EC2 instance. e.g. \`ssh ec2-user@\"$PUBLIC_IP\"\` assuming the ssh-key is loaded into the agent."
 echo "[*] Clone or copy the repo with the above generated code."
-echo "[*] Inside repo directory: 'make' and then 'make run'"
+echo "[*] Inside repo directory: 'make EXAMPLE=<EXAMPLE>' and then 'make run'"
 echo "[*] Run expose_enclave.sh from within the EC2 instance to expose the enclave to the internet."
