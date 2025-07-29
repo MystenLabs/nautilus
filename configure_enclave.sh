@@ -568,6 +568,23 @@ rm "$tmp_traffic"
 
 echo "updated run.sh"
 
+# Add seal-specific vsock listener for port 3001
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    echo "Adding seal-specific port 3001 vsock listener to run.sh..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' '/socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &/a\
+\
+# For seal-example: Listen on VSOCK Port 3001 and forward to localhost 3001\
+socat VSOCK-LISTEN:3001,reuseaddr,fork TCP:localhost:3001 &' src/nautilus-server/run.sh
+    else
+        sed -i '/socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &/a\
+\
+# For seal-example: Listen on VSOCK Port 3001 and forward to localhost 3001\
+socat VSOCK-LISTEN:3001,reuseaddr,fork TCP:localhost:3001 &' src/nautilus-server/run.sh
+    fi
+    echo "Added port 3001 vsock listener for seal example"
+fi
+
 ############################
 # Create or Use Security Group
 ############################
