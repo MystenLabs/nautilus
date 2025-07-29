@@ -120,12 +120,19 @@ fi
 #########################################
 # Decide about secrets (3 scenarios)
 #########################################
-read -p "Do you want to use a secret? (y/n): " USE_SECRET
+# Check if this is the seal example - skip AWS secret prompts entirely
+if [[ "$EXAMPLE" == "seal" ]]; then
+    echo "Seal example detected. Configuring without AWS secrets..."
+    USE_SECRET="n"
+    IS_SEAL_EXAMPLE=true
+else
+    read -p "Do you want to use a secret? (y/n): " USE_SECRET
 
-# Validate input
-if [[ ! "$USE_SECRET" =~ ^[YyNn]$ ]]; then
-    echo "Error: Please enter 'y' or 'n'"
-    exit 1
+    # Validate input
+    if [[ ! "$USE_SECRET" =~ ^[YyNn]$ ]]; then
+        echo "Error: Please enter 'y' or 'n'"
+        exit 1
+    fi
 fi
 
 if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
@@ -142,13 +149,6 @@ if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
         # Create a new secret
         #----------------------------------------------------
         read -p "Enter secret name: " USER_SECRET_NAME
-        
-        # Check if the secret name is "seal" - if so, treat it as no secret
-        if [[ "$USER_SECRET_NAME" == "seal" ]]; then
-            echo "Seal example detected. Skipping AWS secret creation and using no-secret configuration..."
-            USE_SECRET="n"
-            IS_SEAL_EXAMPLE=true
-        fi
     fi
 fi
 
