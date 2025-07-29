@@ -23,9 +23,11 @@ async fn main() -> Result<()> {
 
     let state = Arc::new(AppState { eph_kp, api_key });
 
+    println!("outside server");
     // Spawn host-only init server if seal-example feature is enabled
     #[cfg(feature = "seal-example")]
     {
+        println!("Spawning host-only init server");
         nautilus_server::app::spawn_host_init_server().await?;
     }
 
