@@ -14,12 +14,10 @@ make run
 
 ```
 
-2. Initialize with Encrypted Secret
-
-From the host machine, use the `encrypt-secret-to-seal` command to encrypt and send your secret:
+2. Encrypt your secret with Seal
 
 ```bash
-./src/nautilus-server/target/debug/encrypt-secret-to-seal "your-weather-api-key"
+cargo run --manifest-path src/nautilus-server/Cargo.toml --no-default-features  --features=seal-example --bin seal-cli -- fetch-keys -c src/nautilus-server/src/examples/seal_example/seal_config.yaml "045a27812dbe456392913223221306"
 ```
 
 ## Seal Parameter Load API
@@ -56,6 +54,12 @@ Initializes a parameter retrieval session. This endpoint generates the necessary
     }
   }
 }
+```
+
+### Fetch key
+
+```bash
+cargo run --manifest-path src/nautilus-server/Cargo.toml --no-default-features --features=seal-example --bin seal-cli -- fetch-keys -s <SESSION_ID> -e <ENCRYPTED_OBJECT_HEX> -c src/nautilus-server/src/examples/seal_example/seal_config.yaml
 ```
 
 ### `/seal/complete_parameter_load` (POST)

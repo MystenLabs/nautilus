@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use std::collections::HashMap;
+use sui_sdk::SuiClientBuilder;
+use sui_types::{base_types::ObjectID, object::SuiObjectDataOptions};
 
 const KEY_SIZE: usize = 32;
 
@@ -74,6 +75,7 @@ struct SealConfig {
 // Key server info fetched from chain
 #[derive(Debug, Deserialize)]
 struct KeyServerInfo {
+    #[allow(dead_code)]
     object_id: String,
     name: String,
     url: String,
@@ -121,9 +123,9 @@ enum Commands {
         #[arg(long, default_value = "http://localhost:3001")]
         enclave_url: String,
         
-        /// JSON file containing the encrypted object
+        /// BCS hex string of the encrypted object (from encrypt command output)
         #[arg(short = 'e', long)]
-        encrypted_file: String,
+        encrypted_object: String,
         
         /// Sui RPC URL (default: testnet)
         #[arg(long)]
@@ -200,85 +202,71 @@ fn seal_encrypt(
     Ok(encrypted_object)
 }
 
-// Fetch key server URLs from Sui chain
+// Fetch key server URLs from Sui chain using proper SDK
 async fn fetch_key_server_urls(
     key_server_ids: &[String],
     sui_rpc: &str,
 ) -> Result<Vec<KeyServerInfo>, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
+    let sui_client = SuiClientBuilder::default()
+        .build(sui_rpc)
+        .await?;
+    
     let mut servers = Vec::new();
     
-    for object_id in key_server_ids {
-        // Fetch the key server object
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "sui_getObject",
-            "params": [
-                object_id,
-                {
-                    "showContent": true
+    for object_id_str in key_server_ids {
+        let object_id: ObjectID = object_id_str.parse()
+            .map_err(|e| format!("Invalid object ID {}: {}", object_id_str, e))?;
+        
+        // Get the dynamic field object for version 1
+        let dynamic_field_name = sui_types::dynamic_field::DynamicFieldName {
+            type_: sui_types::TypeTag::U64,
+            value: bcs::to_bytes(&1u64)?, // EXPECTED_SERVER_VERSION = 1
+        };
+        
+        match sui_client.read_api()
+            .get_dynamic_field_object(object_id, dynamic_field_name)
+            .await
+        {
+            Ok(response) => {
+                if let Some(object_data) = response.data {
+                    if let Some(content) = object_data.content {
+                        if let sui_types::object::SuiParsedData::MoveObject(parsed_data) = content {
+                            let fields = &parsed_data.fields;
+                            
+                            // Extract URL and name from the fields
+                            let url = fields.get("url")
+                                .and_then(|v| match v {
+                                    serde_json::Value::String(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .ok_or_else(|| format!("Missing or invalid 'url' field for object {}", object_id_str))?;
+                            
+                            let name = fields.get("name")
+                                .and_then(|v| match v {
+                                    serde_json::Value::String(s) => Some(s.clone()),
+                                    _ => Some("Unknown".to_string()),
+                                })
+                                .unwrap_or_else(|| "Unknown".to_string());
+                            
+                            servers.push(KeyServerInfo {
+                                object_id: object_id_str.clone(),
+                                name,
+                                url,
+                            });
+                        } else {
+                            return Err(format!("Unexpected content type for object {}", object_id_str).into());
+                        }
+                    } else {
+                        return Err(format!("No content found for object {}", object_id_str).into());
+                    }
+                } else {
+                    return Err(format!("Object {} not found", object_id_str).into());
                 }
-            ]
-        });
-        
-        let response = client
-            .post(sui_rpc)
-            .json(&request)
-            .send()
-            .await?;
-        
-        let json: Value = response.json().await?;
-        
-        // For V1 key servers, we need to fetch the dynamic field
-        let versioned_request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "sui_getDynamicFieldObject",
-            "params": [
-                object_id,
-                {
-                    "type": "u64",
-                    "value": "1" // EXPECTED_SERVER_VERSION = 1
-                }
-            ]
-        });
-        
-        let versioned_response = client
-            .post(sui_rpc)
-            .json(&versioned_request)
-            .send()
-            .await?;
-        
-        let versioned_json: Value = versioned_response.json().await?;
-        
-        // Extract URL and name from versioned object
-        let versioned_content = versioned_json
-            .get("result")
-            .and_then(|r| r.get("data"))
-            .and_then(|d| d.get("content"))
-            .and_then(|c| c.get("fields"))
-            .and_then(|f| f.get("value"))
-            .and_then(|v| v.get("fields"))
-            .ok_or("Failed to parse versioned key server object")?;
-        
-        let url = versioned_content
-            .get("url")
-            .and_then(|u| u.as_str())
-            .ok_or("Missing URL in key server")?
-            .to_string();
-        
-        let name = versioned_content
-            .get("name")
-            .and_then(|n| n.as_str())
-            .unwrap_or("Unknown")
-            .to_string();
-        
-        servers.push(KeyServerInfo {
-            object_id: object_id.clone(),
-            name,
-            url,
-        });
+            }
+            Err(e) => {
+                return Err(format!("Failed to fetch dynamic field for object {}: {}", object_id_str, e).into());
+            }
+        }
     }
     
     Ok(servers)
@@ -340,15 +328,16 @@ async fn handle_encrypt(
 
     println!("\n✓ Successfully encrypted secret '{}'", key_name);
     
+    // Serialize to BCS bytes
+    let bcs_bytes = bcs::to_bytes(&encrypted_object)?;
+    println!("\nEncrypted object (BCS hex):");
+    println!("{}", hex::encode(&bcs_bytes));
+    
     // Save to file if output specified
     if let Some(output_path) = output {
-        let json = serde_json::to_string_pretty(&encrypted_object)?;
-        fs::write(&output_path, json)?;
-        println!("Encrypted object saved to: {}", output_path);
-    } else {
-        // Print the encrypted object as JSON
-        println!("\nEncrypted object (JSON):");
-        println!("{}", serde_json::to_string_pretty(&encrypted_object)?);
+        // Save as BCS bytes (hex format)
+        fs::write(&output_path, hex::encode(&bcs_bytes))?;
+        println!("\nBCS hex saved to: {}", output_path);
     }
     
     Ok(())
@@ -358,7 +347,7 @@ async fn handle_fetch_keys(
     session_id: String,
     config_path: String,
     enclave_url: String,
-    encrypted_file: String,
+    encrypted_object_hex: String,
     sui_rpc: Option<String>,
     output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -372,13 +361,11 @@ async fn handle_fetch_keys(
         return Err(format!("Config file not found: {}", config_path).into());
     };
     
-    // Load encrypted object
-    let encrypted_object: EncryptedObject = {
-        let encrypted_str = fs::read_to_string(&encrypted_file)
-            .map_err(|e| format!("Failed to read encrypted file: {}", e))?;
-        serde_json::from_str(&encrypted_str)
-            .map_err(|e| format!("Failed to parse encrypted object: {}", e))?
-    };
+    // Parse the encrypted object from BCS hex
+    let bcs_bytes = hex::decode(encrypted_object_hex.trim())
+        .map_err(|e| format!("Invalid encrypted object hex: {}", e))?;
+    let encrypted_object: EncryptedObject = bcs::from_bytes(&bcs_bytes)
+        .map_err(|e| format!("Failed to parse encrypted object BCS: {}", e))?;
     
     let enclave_object_id = config.enclave_object_id
         .ok_or("enclave_object_id not found in config")?;
@@ -386,52 +373,38 @@ async fn handle_fetch_keys(
     println!("Fetching Seal keys:");
     println!("  Session ID: {}", session_id);
     println!("  Package ID: 0x{}", hex::encode(&encrypted_object.package_id));
+    println!("  Object ID: {}", String::from_utf8_lossy(&encrypted_object.id));
     println!("  Enclave URL: {}", enclave_url);
     
-    // Step 1: Initialize session with enclave
-    println!("\nStep 1: Initializing session with enclave...");
     let client = reqwest::Client::new();
-    let init_request = InitRequest {
-        session_id: session_id.clone(),
-        package_id: hex::encode(&encrypted_object.package_id),
-        enclave_object_id: enclave_object_id.clone(),
-    };
     
-    let init_response = client
-        .post(format!("{}/seal/init_parameter_load", enclave_url))
-        .json(&init_request)
-        .send()
-        .await?;
-    
-    if !init_response.status().is_success() {
-        return Err(format!("Init failed: {}", init_response.text().await?).into());
-    }
-    
-    let init_data: Value = init_response.json().await?;
-    let request_body = init_data.get("request_body")
-        .ok_or("No request_body in init response")?;
-    
-    // Step 2: Fetch key server URLs from chain
-    println!("\nStep 2: Fetching key server information from Sui chain...");
+    // Step 1: Fetch key server URLs from chain
+    println!("\nStep 1: Fetching key server information from Sui chain...");
     let sui_rpc_url = sui_rpc.unwrap_or_else(|| "https://fullnode.testnet.sui.io:443".to_string());
     println!("  Using Sui RPC: {}", sui_rpc_url);
     
-    // Get key server IDs from encrypted object
-    let key_server_ids: Vec<String> = encrypted_object.services
-        .iter()
-        .map(|(id, _)| format!("0x{}", hex::encode(id)))
-        .collect();
+    // Get key server IDs from config
+    let key_server_ids = config.key_servers.clone();
     
     let key_servers = fetch_key_server_urls(&key_server_ids, &sui_rpc_url).await?;
     println!("  Found {} key servers", key_servers.len());
     
-    // Step 3: Fetch keys from Seal servers
-    println!("\nStep 3: Fetching keys from Seal servers...");
+    // Step 2: Fetch keys from Seal servers
+    println!("\nStep 2: Fetching keys from Seal servers...");
+    
+    // Create request body for key servers
+    let request_body = serde_json::json!({
+        "session_id": session_id,
+        "package_id": config.package_id,
+        "enclave_object_id": enclave_object_id,
+        "encrypted_object": encrypted_object
+    });
+    
     let mut seal_responses = Vec::new();
     for server in &key_servers {
-        println!("  Fetching from {} ({})", server.name, server.url);
+        println!("  Fetching from {} ({}/v1/fetch_key)", server.name, server.url);
         match client
-            .post(&server.url)
+            .post(format!("{}/v1/fetch_key", server.url))
             .json(&request_body)
             .send()
             .await
@@ -442,7 +415,8 @@ async fn handle_fetch_keys(
                     seal_responses.push(json_response);
                     println!("    ✓ Success");
                 } else {
-                    eprintln!("    ✗ Server returned error: {}", response.status());
+                    let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    eprintln!("    ✗ Server returned error: {}", error_text);
                 }
             }
             Err(e) => {
@@ -450,22 +424,22 @@ async fn handle_fetch_keys(
             }
         }
         
-        if seal_responses.len() >= encrypted_object.threshold as usize {
-            println!("  Reached threshold of {} responses", encrypted_object.threshold);
+        if seal_responses.len() >= config.threshold as usize {
+            println!("  Reached threshold of {} responses", config.threshold);
             break;
         }
     }
     
-    if seal_responses.len() < encrypted_object.threshold as usize {
+    if seal_responses.len() < config.threshold as usize {
         return Err(format!(
             "Failed to get enough responses: {} < {}",
             seal_responses.len(),
-            encrypted_object.threshold
+            config.threshold
         ).into());
     }
     
-    // Step 4: Complete parameter load
-    println!("\nStep 4: Completing parameter load...");
+    // Step 3: Send responses to enclave /complete endpoint
+    println!("\nStep 3: Completing parameter load with enclave...");
     let complete_request = CompleteRequest {
         session_id,
         encrypted_object,
@@ -484,7 +458,7 @@ async fn handle_fetch_keys(
     
     let result: Value = complete_response.json().await?;
     
-    println!("\n✓ Successfully decrypted data");
+    println!("\n✓ Successfully completed key fetch process");
     
     // Save or print result
     if let Some(output_path) = output {
@@ -492,7 +466,7 @@ async fn handle_fetch_keys(
         fs::write(&output_path, json)?;
         println!("Result saved to: {}", output_path);
     } else {
-        println!("\nDecrypted data:");
+        println!("\nResult:");
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
     
@@ -517,11 +491,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             session_id,
             config,
             enclave_url,
-            encrypted_file,
+            encrypted_object,
             sui_rpc,
             output,
         } => {
-            handle_fetch_keys(session_id, config, enclave_url, encrypted_file, sui_rpc, output).await?;
+            handle_fetch_keys(session_id, config, enclave_url, encrypted_object, sui_rpc, output).await?;
         }
     }
     

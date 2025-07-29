@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
 use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::traits::{KeyPair, ToFromBytes};
 
 // Storage for Seal-specific data
 lazy_static::lazy_static! {
@@ -131,8 +132,8 @@ pub struct CompleteParameterLoadResponse {
 /// Generate ElGamal ephemeral keypair (simplified - using Ed25519 for now)
 pub fn generate_ephemeral_keypair() -> (Vec<u8>, Vec<u8>) {
     let keypair = Ed25519KeyPair::generate(&mut rand::thread_rng());
-    let sk = keypair.private().as_bytes().to_vec();
     let pk = keypair.public().as_bytes().to_vec();
+    let sk = keypair.private().as_bytes().to_vec();
     (sk, pk)
 }
 

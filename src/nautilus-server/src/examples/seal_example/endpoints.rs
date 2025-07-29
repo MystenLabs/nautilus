@@ -9,12 +9,13 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{KeyPair, ToFromBytes, Signer};
+use fastcrypto::encoding::Encoding;
 
 use super::seal_sdk::*;
 
 /// Initialize the Seal wallet if not already initialized
-async fn ensure_seal_wallet() -> Result<Ed25519KeyPair, EnclaveError> {
+async fn ensure_seal_wallet() -> Result<(), EnclaveError> {
     let mut wallet_guard = SEAL_WALLET.write().map_err(|e| {
         EnclaveError::GenericError(format!("Failed to acquire wallet lock: {}", e))
     })?;
@@ -22,11 +23,9 @@ async fn ensure_seal_wallet() -> Result<Ed25519KeyPair, EnclaveError> {
     if wallet_guard.is_none() {
         info!("Initializing Seal wallet");
         let wallet = Ed25519KeyPair::generate(&mut rand::thread_rng());
-        *wallet_guard = Some(wallet.clone());
-        Ok(wallet)
-    } else {
-        Ok(wallet_guard.as_ref().unwrap().clone())
+        *wallet_guard = Some(wallet);
     }
+    Ok(())
 }
 
 /// Init parameter load endpoint - Step 1 of Seal key retrieval
@@ -38,7 +37,14 @@ pub async fn init_parameter_load(
     info!("Initializing parameter load for session: {}", request.session_id);
     
     // Ensure wallet exists
-    let wallet = ensure_seal_wallet().await?;
+    ensure_seal_wallet().await?;
+    
+    let wallet_guard = SEAL_WALLET.read().map_err(|e| {
+        EnclaveError::GenericError(format!("Failed to acquire wallet lock: {}", e))
+    })?;
+    let wallet = wallet_guard.as_ref().ok_or_else(|| {
+        EnclaveError::GenericError("Wallet not initialized".to_string())
+    })?;
     let wallet_address_bytes = wallet.public().as_bytes();
     let wallet_address = hex::encode(wallet_address_bytes);
     

@@ -25,10 +25,13 @@ pub mod app {
     pub use crate::examples::twitter::*;
 
     #[cfg(feature = "weather")]
-    pub use crate::examples::weather::*;
+    pub use crate::examples::weather::{WeatherResponse, WeatherRequest, process_data};
 
     #[cfg(feature = "seal-example")]
-    pub use crate::examples::seal_example::*;
+    pub use crate::examples::seal_example::{
+        init_parameter_load, complete_parameter_load, ping, spawn_host_init_server,
+        PingResponse, seal_sdk
+    };
 }
 
 pub mod common;
