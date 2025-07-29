@@ -13,7 +13,7 @@ show_help() {
     echo ""
     echo "Pre-requisites:"
     echo "  - allowed_endpoints.yaml is configured with all necessary endpoints that the enclave needs"
-    echo "    access to. This is necessary since the enclave doesn't not come with Internet connection,"
+    echo "    access to. This is necessary since the enclave does not come with Internet connection,"
     echo "    all traffics needs to be preconfigured for traffic forwarding."
     echo "  - AWS CLI is installed and configured with proper credentials"
     echo "  - The environment variable KEY_PAIR is set (e.g., export KEY_PAIR=my-key)"
@@ -458,8 +458,6 @@ echo 'source $HOME/.cargo/env' >> /home/ec2-user/.bashrc
 EOF
 fi
 
-cat <<'EOF' >> user-data.sh
-
 # Append endpoint configuration to the vsock-proxy YAML if endpoints were provided.
 if [ -n "$ENDPOINTS" ]; then
     for ep in $ENDPOINTS; do
@@ -468,7 +466,7 @@ if [ -n "$ENDPOINTS" ]; then
 fi
 
 # Continue the user-data script
-cat <<EOF >> user-data.sh
+cat <<'EOF' >> user-data.sh
 # Stop the allocator so we can modify its configuration
 sudo systemctl stop nitro-enclaves-allocator.service
 
