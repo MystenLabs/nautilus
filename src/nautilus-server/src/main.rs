@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     #[cfg(feature = "seal-example")]
     {
         println!("Spawning host-only init server");
-        nautilus_server::app::spawn_host_init_server().await?;
+        nautilus_server::app::spawn_host_init_server(state.clone()).await?;
     }
 
     // Define your own restricted CORS policy here if needed.

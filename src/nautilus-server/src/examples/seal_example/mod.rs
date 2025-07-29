@@ -1,6 +1,11 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod seal_sdk;
+pub mod endpoints;
+
+pub use endpoints::{init_parameter_load, complete_parameter_load};
+
 use crate::common::IntentMessage;
 use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
@@ -11,46 +16,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;
-use std::sync::RwLock;
-
-// Storage for encrypted secrets
-use std::collections::HashMap;
-lazy_static::lazy_static! {
-    static ref ENCRYPTED_SECRETS: RwLock<HashMap<String, EncryptedObject>> = RwLock::new(HashMap::new());
-}
-
-/// Structure to hold the encrypted API key and related data
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct EncryptedApiKey {
-    pub encrypted_object: EncryptedObject,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptedObject {
-    pub version: u8,
-    pub package_id: [u8; 32],
-    pub id: Vec<u8>,
-    pub services: Vec<([u8; 32], u8)>,
-    pub threshold: u8,
-    pub encrypted_shares: IBEEncryptions,
-    pub ciphertext: Ciphertext,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum IBEEncryptions {
-    BonehFranklinBLS12381 {
-        nonce: Vec<u8>,
-        encrypted_shares: Vec<Vec<u8>>,
-        encrypted_randomness: Vec<u8>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Ciphertext {
-    Aes256Gcm { blob: Vec<u8>, aad: Option<Vec<u8>> },
-    Hmac256Ctr { blob: Vec<u8>, aad: Option<Vec<u8>>, mac: [u8; 32] },
-    Plain,
-}
 
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,40 +30,11 @@ pub struct WeatherRequest {
     pub location: String,
 }
 
-/// Request to set an encrypted secret
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SetEncryptedSecretRequest {
-    pub key: String,  // The name/key for this secret (e.g., "API_KEY")
-    pub encrypted_object: EncryptedObject,
-}
-
-/// Response from setting encrypted secret
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SetEncryptedSecretResponse {
-    pub success: bool,
-    pub message: String,
-}
-
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError> {
-    // Check if we have an encrypted API key stored
-    let api_key = {
-        let secrets = ENCRYPTED_SECRETS.read().map_err(|e| {
-            EnclaveError::GenericError(format!("Failed to read encrypted secrets: {}", e))
-        })?;
-        
-        if let Some(_encrypted_obj) = secrets.get("API_KEY") {
-            // TODO: Decrypt the API key here once you provide the decryption method
-            // For now, fall back to the state's api_key
-            info!("Using encrypted API key (decryption not yet implemented)");
-            state.api_key.clone()
-        } else {
-            info!("No encrypted API key found, using default from environment");
-            state.api_key.clone()
-        }
-    };
+    let api_key = state.api_key.clone();
     
     let url = format!(
         "https://api.weatherapi.com/v1/current.json?key={}&q={}",
@@ -155,30 +91,13 @@ pub async fn ping() -> Json<PingResponse> {
     })
 }
 
-/// Set an encrypted secret
-pub async fn set_encrypted_secret(
-    Json(request): Json<SetEncryptedSecretRequest>,
-) -> Result<Json<SetEncryptedSecretResponse>, EnclaveError> {
-    info!("Setting encrypted secret with key: {}", request.key);
-    
-    // Store the encrypted secret
-    let mut storage = ENCRYPTED_SECRETS.write().map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to write encrypted secrets: {}", e))
-    })?;
-    
-    storage.insert(request.key.clone(), request.encrypted_object);
-    
-    Ok(Json(SetEncryptedSecretResponse {
-        success: true,
-        message: format!("Encrypted secret '{}' stored successfully", request.key),
-    }))
-}
-
 /// Spawn a separate server on localhost:3001 for host-only init access
-pub async fn spawn_host_init_server() -> Result<(), EnclaveError> {
+pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/init/ping", get(ping))
-        .route("/set_encrypted_secret", post(set_encrypted_secret));
+        .route("/seal/init_parameter_load", post(init_parameter_load))
+        .route("/seal/complete_parameter_load", post(complete_parameter_load))
+        .with_state(state);
 
     let host_listener = TcpListener::bind("0.0.0.0:3001")
         .await

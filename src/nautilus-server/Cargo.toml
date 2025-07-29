@@ -7,8 +7,8 @@ license = "Apache-2.0"
 repository = "https://github.com/MystenLabs/nautilus"
 
 [[bin]]
-name = "encrypt-secret-to-seal"
-path = "src/bin/encrypt-secret-to-seal.rs"
+name = "seal-cli"
+path = "src/bin/seal_cli.rs"
 required-features = ["seal-example"]
 
 [workspace]
