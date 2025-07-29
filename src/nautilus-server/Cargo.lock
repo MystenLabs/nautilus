@@ -3881,6 +3881,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_yaml 0.9.34+deprecated",
+ "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
  "tokio",

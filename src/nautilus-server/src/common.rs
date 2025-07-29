@@ -77,7 +77,7 @@ pub fn to_signed_response<T: Serialize + Clone>(
     };
 
     let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
-    let sig = kp.sign(&signing_payload);
+    let sig: fastcrypto::ed25519::Ed25519Signature = kp.sign(&signing_payload);
     ProcessedDataResponse {
         response: intent_msg,
         signature: Hex::encode(sig),

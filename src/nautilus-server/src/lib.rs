@@ -9,7 +9,7 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
 use std::fmt;
 
-mod examples {
+pub mod examples {
     #[cfg(feature = "twitter")]
     pub mod twitter;
 
@@ -30,7 +30,7 @@ pub mod app {
     #[cfg(feature = "seal-example")]
     pub use crate::examples::seal_example::{
         init_parameter_load, complete_parameter_load, ping, spawn_host_init_server,
-        PingResponse, seal_sdk
+        PingResponse, seal_sdk, process_data
     };
 }
 

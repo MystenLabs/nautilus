@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use sui_sdk::SuiClientBuilder;
-use sui_types::{base_types::ObjectID, object::SuiObjectDataOptions};
 
-const KEY_SIZE: usize = 32;
+// Import from the parent crate
+use nautilus_server::examples::seal_example::seal_sdk::{fetch_key_server_urls, seal_encrypt, IBEPublicKeys, EncryptionInput};
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptedObject {
@@ -38,17 +38,6 @@ pub enum Ciphertext {
     Plain,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum IBEPublicKeys {
-    BonehFranklinBLS12381(Vec<Vec<u8>>),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum EncryptionInput {
-    Aes256Gcm { data: Vec<u8>, aad: Option<Vec<u8>> },
-    Hmac256Ctr { data: Vec<u8>, aad: Option<Vec<u8>> },
-    Plain,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitRequest {
@@ -72,14 +61,6 @@ struct SealConfig {
     enclave_object_id: Option<String>,
 }
 
-// Key server info fetched from chain
-#[derive(Debug, Deserialize)]
-struct KeyServerInfo {
-    #[allow(dead_code)]
-    object_id: String,
-    name: String,
-    url: String,
-}
 
 #[derive(Parser)]
 #[command(name = "seal-cli")]
@@ -149,128 +130,7 @@ fn parse_object_id(hex_str: &str) -> Result<[u8; 32], String> {
     Ok(arr)
 }
 
-/// Simple seal_encrypt implementation for the CLI
-fn seal_encrypt(
-    package_id: [u8; 32],
-    id: Vec<u8>,
-    key_servers: Vec<[u8; 32]>,
-    _public_keys: &IBEPublicKeys,
-    threshold: u8,
-    encryption_input: EncryptionInput,
-) -> Result<EncryptedObject, Box<dyn std::error::Error>> {
-    use rand::{thread_rng, RngCore};
-    
-    // Generate a random key
-    let mut dem_key = [0u8; KEY_SIZE];
-    thread_rng().fill_bytes(&mut dem_key);
-    
-    // Encrypt the data
-    let ciphertext = match encryption_input {
-        EncryptionInput::Aes256Gcm { data, aad } => {
-            // For this example, we'll use a simple XOR encryption
-            // In production, this would use proper AES-GCM encryption
-            let mut blob = data.clone();
-            for (i, byte) in blob.iter_mut().enumerate() {
-                *byte ^= dem_key[i % KEY_SIZE];
-            }
-            Ciphertext::Aes256Gcm { blob, aad }
-        }
-        _ => return Err("Only Aes256Gcm encryption is supported in this example".into()),
-    };
-    
-    // Create mock encrypted shares (in production, these would be real IBE encrypted shares)
-    let services: Vec<([u8; 32], u8)> = key_servers
-        .iter()
-        .enumerate()
-        .map(|(i, ks)| (*ks, i as u8))
-        .collect();
-    
-    let encrypted_object = EncryptedObject {
-        version: 0,
-        package_id,
-        id,
-        services,
-        threshold,
-        encrypted_shares: IBEEncryptions::BonehFranklinBLS12381 {
-            nonce: vec![0u8; 32],
-            encrypted_shares: key_servers.iter().map(|_| vec![0u8; 48]).collect(),
-            encrypted_randomness: vec![0u8; 32],
-        },
-        ciphertext,
-    };
-    
-    Ok(encrypted_object)
-}
 
-// Fetch key server URLs from Sui chain using proper SDK
-async fn fetch_key_server_urls(
-    key_server_ids: &[String],
-    sui_rpc: &str,
-) -> Result<Vec<KeyServerInfo>, Box<dyn std::error::Error>> {
-    let sui_client = SuiClientBuilder::default()
-        .build(sui_rpc)
-        .await?;
-    
-    let mut servers = Vec::new();
-    
-    for object_id_str in key_server_ids {
-        let object_id: ObjectID = object_id_str.parse()
-            .map_err(|e| format!("Invalid object ID {}: {}", object_id_str, e))?;
-        
-        // Get the dynamic field object for version 1
-        let dynamic_field_name = sui_types::dynamic_field::DynamicFieldName {
-            type_: sui_types::TypeTag::U64,
-            value: bcs::to_bytes(&1u64)?, // EXPECTED_SERVER_VERSION = 1
-        };
-        
-        match sui_client.read_api()
-            .get_dynamic_field_object(object_id, dynamic_field_name)
-            .await
-        {
-            Ok(response) => {
-                if let Some(object_data) = response.data {
-                    if let Some(content) = object_data.content {
-                        if let sui_types::object::SuiParsedData::MoveObject(parsed_data) = content {
-                            let fields = &parsed_data.fields;
-                            
-                            // Extract URL and name from the fields
-                            let url = fields.get("url")
-                                .and_then(|v| match v {
-                                    serde_json::Value::String(s) => Some(s.clone()),
-                                    _ => None,
-                                })
-                                .ok_or_else(|| format!("Missing or invalid 'url' field for object {}", object_id_str))?;
-                            
-                            let name = fields.get("name")
-                                .and_then(|v| match v {
-                                    serde_json::Value::String(s) => Some(s.clone()),
-                                    _ => Some("Unknown".to_string()),
-                                })
-                                .unwrap_or_else(|| "Unknown".to_string());
-                            
-                            servers.push(KeyServerInfo {
-                                object_id: object_id_str.clone(),
-                                name,
-                                url,
-                            });
-                        } else {
-                            return Err(format!("Unexpected content type for object {}", object_id_str).into());
-                        }
-                    } else {
-                        return Err(format!("No content found for object {}", object_id_str).into());
-                    }
-                } else {
-                    return Err(format!("Object {} not found", object_id_str).into());
-                }
-            }
-            Err(e) => {
-                return Err(format!("Failed to fetch dynamic field for object {}: {}", object_id_str, e).into());
-            }
-        }
-    }
-    
-    Ok(servers)
-}
 
 async fn handle_encrypt(
     secret: String,
@@ -372,7 +232,7 @@ async fn handle_fetch_keys(
     
     println!("Fetching Seal keys:");
     println!("  Session ID: {}", session_id);
-    println!("  Package ID: 0x{}", hex::encode(&encrypted_object.package_id));
+    println!("  Package ID: {}", hex::encode(&encrypted_object.package_id));
     println!("  Object ID: {}", String::from_utf8_lossy(&encrypted_object.id));
     println!("  Enclave URL: {}", enclave_url);
     
@@ -405,6 +265,8 @@ async fn handle_fetch_keys(
         println!("  Fetching from {} ({}/v1/fetch_key)", server.name, server.url);
         match client
             .post(format!("{}/v1/fetch_key", server.url))
+            .header("Client-Sdk-Type", "rust")
+            .header("Client-Sdk-Version", "1.0.0")
             .json(&request_body)
             .send()
             .await

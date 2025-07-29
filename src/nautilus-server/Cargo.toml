@@ -36,11 +36,11 @@ hex = "0.4"
 clap = { version = "4.0", features = ["derive"] }
 sui-sdk = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 sui-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
-
+sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 regex = { version = "1.5", optional = true }
 
 [features]
 default = ["weather"]
 weather = []
 twitter = ["regex"]
-seal-example = ["sui-sdk", "sui-types"]
+seal-example = ["sui-sdk", "sui-types", "sui-json-rpc-types"]

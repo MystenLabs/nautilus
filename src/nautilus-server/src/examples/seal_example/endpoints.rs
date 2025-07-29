@@ -85,7 +85,8 @@ pub async fn init_parameter_load(
     };
     
     // Sign the sender address for seal_approve
-    let sender_signature = state.eph_kp.sign(wallet_address_bytes).as_bytes().to_vec();
+    let sender_signature: fastcrypto::ed25519::Ed25519Signature = state.eph_kp.sign(wallet_address_bytes);
+    let sender_signature = sender_signature.as_bytes().to_vec();
     
     // Create PTB using proper builder
     let ptb_bytes = create_seal_approve_ptb(
@@ -104,7 +105,8 @@ pub async fn init_parameter_load(
         ttl_min,
         current_time
     );
-    let cert_signature = wallet.sign(cert_msg.as_bytes()).as_bytes().to_vec();
+    let cert_signature: fastcrypto::ed25519::Ed25519Signature = wallet.sign(cert_msg.as_bytes());
+    let cert_signature = cert_signature.as_bytes().to_vec();
     
     // Create request signature - session key signs the request
     let request_msg = format!(
@@ -113,7 +115,8 @@ pub async fn init_parameter_load(
         hex::encode(&eph_pk),
         hex::encode(&eph_pk), // enc_verification_key
     );
-    let request_signature = state.eph_kp.sign(request_msg.as_bytes()).as_bytes().to_vec();
+    let request_signature: fastcrypto::ed25519::Ed25519Signature = state.eph_kp.sign(request_msg.as_bytes());
+    let request_signature = request_signature.as_bytes().to_vec();
     
     // Store ephemeral session
     let ephemeral_session = EphemeralSession {
