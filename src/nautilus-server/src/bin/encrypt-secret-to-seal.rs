@@ -175,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .long("config")
                 .value_name("FILE")
                 .help("Path to seal_config.yaml file")
-                .default_value("./src/nautilus-server/src/examples/seal/seal_config.yaml"),
+                .default_value("./src/nautilus-server/src/examples/seal_example/seal_config.yaml"),
         )
         .arg(
             Arg::new("package-id")
