@@ -12,6 +12,10 @@ sleep 5
 # Seal example: create empty secrets.json (required by run.sh)
 echo 'Creating empty secrets.json for seal example...'
 echo '{}' > secrets.json
+# Seal example: create empty secrets.json (required by run.sh)
 
 cat secrets.json | socat - VSOCK-CONNECT:$ENCLAVE_CID:7777
 socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:$ENCLAVE_CID:3000 &
+# Seal example: Expose port 3001 for localhost-only access to init endpoint
+echo "Exposing seal init endpoint on localhost:3001..."
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:$ENCLAVE_CID:3001 &
