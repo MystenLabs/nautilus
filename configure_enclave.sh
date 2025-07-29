@@ -121,7 +121,7 @@ fi
 # Decide about secrets (3 scenarios)
 #########################################
 # Check if this is the seal example - skip AWS secret prompts entirely
-if [[ "$EXAMPLE" == "seal" ]]; then
+if [[ "$EXAMPLE" == "seal-example" ]]; then
     echo "Seal example detected. Configuring without AWS secrets..."
     USE_SECRET="n"
     IS_SEAL_EXAMPLE=true
