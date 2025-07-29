@@ -14,4 +14,8 @@ sleep 5
 cat secrets.json | socat - VSOCK-CONNECT:$ENCLAVE_CID:7777
 socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:$ENCLAVE_CID:3000 &
 
+# Seal example: Expose port 3001 for localhost-only access to init endpoint
+echo "Exposing seal init endpoint on localhost:3001..."
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:$ENCLAVE_CID:3001 &
+
 # Additional port configurations will be added here by configure_enclave.sh if needed
