@@ -180,7 +180,7 @@ pub async fn spawn_host_init_server() -> Result<(), EnclaveError> {
         .route("/init/ping", get(ping))
         .route("/set_encrypted_secret", post(set_encrypted_secret));
 
-    let host_listener = TcpListener::bind("127.0.0.1:3001")
+    let host_listener = TcpListener::bind("0.0.0.0:3001")
         .await
         .map_err(|e| EnclaveError::GenericError(format!("Failed to bind host init server: {}", e)))?;
     
