@@ -94,7 +94,7 @@ pub async fn ping() -> Json<PingResponse> {
 /// Spawn a separate server on localhost:3001 for host-only init access
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
-        .route("/init/ping", get(ping))
+        .route("/ping", get(ping))
         .route("/seal/init_parameter_load", post(init_parameter_load))
         .route("/seal/complete_parameter_load", post(complete_parameter_load))
         .with_state(state);
