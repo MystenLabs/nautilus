@@ -32,19 +32,25 @@ make run
 ./expose_enclave.sh
 ```
 
-### 4. Initialize with Encrypted API Key
+### 4. Initialize with Encrypted Secret
 
-From the host machine, use the `seal-init-client` to encrypt and send your API key:
+From the host machine, use the `encrypt-secret-to-seal` command to encrypt and send your secret:
 
 ```bash
-# The client will encrypt your API key and send it to the enclave
-./src/nautilus-server/target/debug/seal-init-client \
-    --api-key "your-weather-api-key" \
-    --package-id "0x0000000000000000000000000000000000000000000000000000000000000001" \
-    --key-servers "0x1111111111111111111111111111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222222222222222222222222222,0x3333333333333333333333333333333333333333333333333333333333333333" \
-    --threshold 2 \
-    --enclave-host localhost \
-    --enclave-port 3001
+# Basic usage - encrypts a secret with default key name "API_KEY"
+./src/nautilus-server/target/debug/encrypt-secret-to-seal "your-weather-api-key"
+
+# Specify a custom key name for the secret
+./src/nautilus-server/target/debug/encrypt-secret-to-seal "your-secret-value" --key-name "MY_SECRET"
+
+# Use a custom config file
+./src/nautilus-server/target/debug/encrypt-secret-to-seal "your-secret" \
+    --config /path/to/your/seal_config.yaml
+
+# Override specific parameters from the config file
+./src/nautilus-server/target/debug/encrypt-secret-to-seal "your-secret" \
+    --threshold 3 \
+    --enclave-host 192.168.1.10
 ```
 
 The client will:
@@ -68,50 +74,97 @@ curl -X POST http://localhost:3000/process_data \
 
 ## CLI Options
 
-The `seal-init-client` supports the following options:
+The `encrypt-secret-to-seal` command supports the following options:
 
 ```
 USAGE:
-    seal-init-client [OPTIONS] --api-key <KEY> --package-id <HEX> --key-servers <HEX>
+    encrypt-secret-to-seal <SECRET> [OPTIONS]
+
+ARGUMENTS:
+    <SECRET>                      The secret to encrypt (required)
 
 OPTIONS:
-    -k, --api-key <KEY>           The Weather API key to encrypt
-    -p, --package-id <HEX>        Package ID (32-byte hex string)
-    -s, --key-servers <HEX>       Comma-separated list of key server IDs (32-byte hex strings)
-    -t, --threshold <NUM>         Threshold for decryption [default: 2]
-    -e, --enclave-host <HOST>     Enclave host address [default: localhost]
-        --enclave-port <PORT>     Enclave init port [default: 3001]
+    -n, --key-name <NAME>         Name for the secret in the enclave [default: API_KEY]
+    -c, --config <FILE>           Path to seal_config.yaml file 
+                                  [default: ./src/nautilus-server/src/examples/seal/seal_config.yaml]
+    -p, --package-id <HEX>        Package ID (32-byte hex string) - overrides config file
+    -s, --key-servers <HEX>       Comma-separated list of key server IDs - overrides config file
+    -t, --threshold <NUM>         Threshold for decryption - overrides config file
+    -e, --enclave-host <HOST>     Enclave host address - overrides config file
+        --enclave-port <PORT>     Enclave init port - overrides config file
     -h, --help                    Print help information
     -V, --version                 Print version information
+```
+
+## Configuration File Format
+
+The `seal_config.yaml` file should contain:
+
+```yaml
+package_id: "0xba06ef0fd022b4831e49de32d032b185cf7ea0b9ac1ea168f9ba952f37775936"
+
+key_servers:
+  - "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75"
+  - "0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8"
+
+threshold: 2
+
+# Optional: enclave connection settings
+enclave:
+  host: "localhost"
+  port: 3001
 ```
 
 ## Example with Real Object IDs
 
 If you have actual Seal infrastructure deployed:
 
-```bash
-# Replace with your actual object IDs
-PACKAGE_ID="0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-KEY_SERVER_1="0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-KEY_SERVER_2="0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"
-KEY_SERVER_3="0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba"
+1. Update your `seal_config.yaml` with real object IDs:
 
-./target/debug/seal-init-client \
-    --api-key "your-actual-api-key" \
-    --package-id "$PACKAGE_ID" \
-    --key-servers "$KEY_SERVER_1,$KEY_SERVER_2,$KEY_SERVER_3" \
-    --threshold 2
+```yaml
+package_id: "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+key_servers:
+  - "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+  - "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"
+  - "0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba"
+threshold: 2
+```
+
+2. Run the command:
+
+```bash
+./target/debug/encrypt-secret-to-seal "your-actual-api-key"
 ```
 
 ## How It Works
 
-1. **Encryption**: The CLI tool encrypts your API key using Seal's encryption scheme with the provided package ID and key server information.
+1. **Configuration**: The command reads parameters from `seal_config.yaml` (or command-line overrides).
 
-2. **Transmission**: The encrypted data is sent to the enclave's `/set_encrypted_secret` endpoint on port 3001 (localhost only).
+2. **Encryption**: Your secret is encrypted using Seal's encryption scheme with the configured package ID and key server information.
 
-3. **Storage**: The enclave stores the encrypted secret with the key name "API_KEY" in memory.
+3. **Transmission**: The encrypted data is sent to the enclave's `/init` endpoint on port 3001 (localhost only).
 
-4. **Usage**: When processing weather requests, the enclave will decrypt the API key (decryption implementation to be added).
+4. **Storage**: The enclave stores the encrypted secret with the specified key name (default: "API_KEY") in memory.
+
+5. **Usage**: When the enclave needs the secret, it will decrypt it using Seal (decryption implementation to be added).
+
+## Examples of Secrets You Can Encrypt
+
+- **API Keys**: Weather API, Twitter API, or any external service API key
+- **Database Credentials**: Database passwords or connection strings
+- **Encryption Keys**: Master keys for data encryption
+- **Authentication Tokens**: OAuth tokens, JWT secrets, etc.
+
+```bash
+# Weather API key
+./target/debug/encrypt-secret-to-seal "your-weather-api-key"
+
+# Database password
+./target/debug/encrypt-secret-to-seal "db-password-123" --key-name "DB_PASSWORD"
+
+# JWT secret
+./target/debug/encrypt-secret-to-seal "my-jwt-secret-key" --key-name "JWT_SECRET"
+```
 
 ## Using the /set_encrypted_secret Endpoint
 
@@ -137,12 +190,17 @@ Content-Type: application/json
 
 ### Adding Multiple Secrets
 
-You can store multiple encrypted secrets by calling the endpoint multiple times:
+You can store multiple encrypted secrets by running the command multiple times with different key names:
 
 ```bash
-# Each call to seal-init-client encrypts and sends one secret
-# The endpoint can be called multiple times with different keys
-# Example: DB_PASSWORD, ANOTHER_API_KEY, etc.
+# Encrypt and store weather API key
+./target/debug/encrypt-secret-to-seal "weather-api-key-123"
+
+# Encrypt and store database password
+./target/debug/encrypt-secret-to-seal "my-db-password" --key-name "DB_PASSWORD"
+
+# Encrypt and store another API key
+./target/debug/encrypt-secret-to-seal "twitter-api-key" --key-name "TWITTER_API_KEY"
 ```
 
 ## Security Notes

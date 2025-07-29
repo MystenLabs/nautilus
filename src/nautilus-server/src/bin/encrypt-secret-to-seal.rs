@@ -4,6 +4,9 @@
 use clap::{Arg, Command};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use std::fs;
+use std::path::Path;
+use bcs;
 
 const KEY_SIZE: usize = 32;
 
@@ -54,6 +57,31 @@ pub struct InitRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EncryptedApiKey {
     pub encrypted_object: EncryptedObject,
+}
+
+#[derive(Debug, Deserialize)]
+struct SealConfig {
+    package_id: String,
+    key_servers: Vec<String>,
+    threshold: u8,
+    #[serde(default)]
+    enclave: Option<EnclaveConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnclaveConfig {
+    #[serde(default = "default_host")]
+    host: String,
+    #[serde(default = "default_port")]
+    port: u16,
+}
+
+fn default_host() -> String {
+    "localhost".to_string()
+}
+
+fn default_port() -> u16 {
+    3001
 }
 
 /// Parse a hex string into a 32-byte array
@@ -123,65 +151,126 @@ fn seal_encrypt(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = Command::new("seal-init-client")
+    let matches = Command::new("encrypt-secret-to-seal")
         .version("1.0")
-        .about("Initialize Nautilus enclave with Seal-encrypted API key")
+        .about("Encrypt a secret using Seal and send it to Nautilus enclave")
         .arg(
-            Arg::new("api-key")
-                .short('k')
-                .long("api-key")
-                .value_name("KEY")
-                .help("The Weather API key to encrypt")
-                .required(true),
+            Arg::new("secret")
+                .value_name("SECRET")
+                .help("The secret to encrypt")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::new("key-name")
+                .short('n')
+                .long("key-name")
+                .value_name("NAME")
+                .help("Name for the secret in the enclave (default: API_KEY)")
+                .default_value("API_KEY"),
+        )
+        .arg(
+            Arg::new("config")
+                .short('c')
+                .long("config")
+                .value_name("FILE")
+                .help("Path to seal_config.yaml file")
+                .default_value("./src/nautilus-server/src/examples/seal/seal_config.yaml"),
         )
         .arg(
             Arg::new("package-id")
                 .short('p')
                 .long("package-id")
                 .value_name("HEX")
-                .help("Package ID (32-byte hex string)")
-                .required(true),
+                .help("Package ID (32-byte hex string) - overrides config file")
+                .required(false),
         )
         .arg(
             Arg::new("key-servers")
                 .short('s')
                 .long("key-servers")
                 .value_name("HEX")
-                .help("Comma-separated list of key server IDs (32-byte hex strings)")
-                .required(true),
+                .help("Comma-separated list of key server IDs - overrides config file")
+                .required(false),
         )
         .arg(
             Arg::new("threshold")
                 .short('t')
                 .long("threshold")
                 .value_name("NUM")
-                .help("Threshold for decryption")
-                .default_value("2"),
+                .help("Threshold for decryption - overrides config file")
+                .required(false),
         )
         .arg(
             Arg::new("enclave-host")
                 .short('e')
                 .long("enclave-host")
                 .value_name("HOST")
-                .help("Enclave host address")
-                .default_value("localhost"),
+                .help("Enclave host address - overrides config file")
+                .required(false),
         )
         .arg(
             Arg::new("enclave-port")
                 .long("enclave-port")
                 .value_name("PORT")
-                .help("Enclave init port")
-                .default_value("3001"),
+                .help("Enclave init port - overrides config file")
+                .required(false),
         )
         .get_matches();
 
     // Parse arguments
-    let api_key = matches.get_one::<String>("api-key").unwrap();
-    let package_id = parse_object_id(matches.get_one::<String>("package-id").unwrap())?;
-    let key_servers_str = matches.get_one::<String>("key-servers").unwrap();
-    let threshold = u8::from_str(matches.get_one::<String>("threshold").unwrap())?;
-    let enclave_host = matches.get_one::<String>("enclave-host").unwrap();
-    let enclave_port = matches.get_one::<String>("enclave-port").unwrap();
+    let secret = matches.get_one::<String>("secret").unwrap();
+    let key_name = matches.get_one::<String>("key-name").unwrap();
+    let config_path = matches.get_one::<String>("config").unwrap();
+    
+    // Load config file
+    let config: SealConfig = if Path::new(config_path).exists() {
+        let config_str = fs::read_to_string(config_path)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        serde_yaml::from_str(&config_str)
+            .map_err(|e| format!("Failed to parse config file: {}", e))?
+    } else {
+        return Err(format!("Config file not found: {}", config_path).into());
+    };
+    
+    // Use command line args if provided, otherwise use config values
+    let package_id = if let Some(pid) = matches.get_one::<String>("package-id") {
+        parse_object_id(pid)?
+    } else {
+        parse_object_id(&config.package_id)?
+    };
+    
+    let key_servers_str = if let Some(ks) = matches.get_one::<String>("key-servers") {
+        ks.clone()
+    } else {
+        config.key_servers.join(",")
+    };
+    
+    let threshold = if let Some(t) = matches.get_one::<String>("threshold") {
+        u8::from_str(t)?
+    } else {
+        config.threshold
+    };
+    
+    let (enclave_host, enclave_port) = if let Some(enclave_cfg) = config.enclave {
+        (
+            matches.get_one::<String>("enclave-host")
+                .cloned()
+                .unwrap_or(enclave_cfg.host),
+            matches.get_one::<String>("enclave-port")
+                .unwrap_or(&enclave_cfg.port.to_string())
+                .to_string()
+        )
+    } else {
+        (
+            matches.get_one::<String>("enclave-host")
+                .cloned()
+                .unwrap_or_else(|| "localhost".to_string()),
+            matches.get_one::<String>("enclave-port")
+                .cloned()
+                .unwrap_or_else(|| "3001".to_string())
+        )
+    };
 
     // Parse key servers
     let key_servers: Vec<[u8; 32]> = key_servers_str
@@ -193,7 +282,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Number of key servers must be >= threshold".into());
     }
 
-    println!("Encrypting API key with Seal parameters:");
+    println!("Encrypting secret with Seal parameters:");
+    println!("  Secret name: {}", key_name);
     println!("  Package ID: 0x{}", hex::encode(&package_id));
     println!("  Key servers: {}", key_servers.len());
     println!("  Threshold: {}", threshold);
@@ -203,15 +293,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         key_servers.iter().map(|_| vec![0u8; 48]).collect()
     );
 
-    // Encrypt the API key
+    // Encrypt the secret
     let encryption_input = EncryptionInput::Aes256Gcm {
-        data: api_key.as_bytes().to_vec(),
-        aad: Some(b"weather-api-key".to_vec()),
+        data: secret.as_bytes().to_vec(),
+        aad: Some(key_name.as_bytes().to_vec()),
     };
 
     let encrypted_object = seal_encrypt(
         package_id,
-        b"api-key".to_vec(),
+        key_name.as_bytes().to_vec(),
         key_servers,
         &public_keys,
         threshold,
@@ -219,31 +309,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let init_request = InitRequest {
-        encrypted_api_key: EncryptedApiKey { encrypted_object },
+        encrypted_api_key: EncryptedApiKey { encrypted_object: encrypted_object.clone() },
     };
 
-    // Send to enclave
-    let url = format!("http://{}:{}/init", enclave_host, enclave_port);
-    println!("\nSending encrypted API key to: {}", url);
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(&url)
-        .json(&init_request)
-        .send()
-        .await?;
-
-    let status = response.status();
-    let body = response.text().await?;
-
-    if status.is_success() {
-        println!("✓ Successfully initialized enclave with encrypted API key");
-        println!("Response: {}", body);
-    } else {
-        println!("✗ Failed to initialize enclave");
-        println!("Status: {}", status);
-        println!("Response: {}", body);
-    }
+    // Print the encrypted result as hex encoded BCS bytes
+    println!("\n✓ Successfully encrypted secret '{}'", key_name);
+    
+    // Serialize to BCS and print hex
+    let bcs_bytes = bcs::to_bytes(&init_request)?;
+    println!("\nBCS bytes (hex):");
+    println!("{}", hex::encode(&bcs_bytes));
+    
+    println!("\nTo send this to the enclave, you would POST to:");
+    println!("  URL: http://{}:{}/init", enclave_host, enclave_port);
+    println!("  Content-Type: application/json");
 
     Ok(())
 }
