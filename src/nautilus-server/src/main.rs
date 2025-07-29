@@ -23,6 +23,12 @@ async fn main() -> Result<()> {
 
     let state = Arc::new(AppState { eph_kp, api_key });
 
+    // Spawn host-only init server if seal-example feature is enabled
+    #[cfg(feature = "seal-example")]
+    {
+        nautilus_server::app::spawn_host_init_server().await?;
+    }
+
     // Define your own restricted CORS policy here if needed.
     let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any);
 

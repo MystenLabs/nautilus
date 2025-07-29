@@ -14,6 +14,9 @@ mod examples {
 
     #[cfg(feature = "weather")]
     pub mod weather;
+
+    #[cfg(feature = "seal-example")]
+    pub mod seal;
 }
 
 pub mod app {
@@ -22,6 +25,9 @@ pub mod app {
 
     #[cfg(feature = "weather")]
     pub use crate::examples::weather::*;
+
+    #[cfg(feature = "seal-example")]
+    pub use crate::examples::seal::*;
 }
 
 pub mod common;

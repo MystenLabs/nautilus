@@ -52,6 +52,13 @@ API_ENV_VAR_NAME="${API_ENV_VAR_NAME:-API_KEY}"
 EXAMPLE="${1:-${EXAMPLE:-weather}}" # defaults to weather
 ALLOWLIST_PATH="src/nautilus-server/src/examples/${EXAMPLE}/allowed_endpoints.yaml"
 
+# Check if using seal example
+IS_SEAL_EXAMPLE=false
+if [ "$EXAMPLE" = "seal" ]; then
+    IS_SEAL_EXAMPLE=true
+    echo "Using seal example - will skip AWS Secret Manager configuration"
+fi
+
 ############################
 # Cleanup Old Files
 ############################
@@ -120,7 +127,17 @@ fi
 #########################################
 # Decide about secrets (3 scenarios)
 #########################################
-read -p "Do you want to use a secret? (y/n): " USE_SECRET
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    # For seal example, skip AWS Secret Manager completely
+    USE_SECRET="n"
+    echo "Seal example detected - skipping AWS Secret Manager configuration"
+    echo ""
+    echo "After the enclave is running, you can initialize it with encrypted secrets using:"
+    echo "  ./src/nautilus-server/target/debug/seal-init-client --api-key <KEY> --package-id <ID> --key-servers <SERVERS>"
+    echo ""
+else
+    read -p "Do you want to use a secret? (y/n): " USE_SECRET
+fi
 
 # Validate input
 if [[ ! "$USE_SECRET" =~ ^[YyNn]$ ]]; then
@@ -360,6 +377,36 @@ else
         sed -i '/SECRET_VALUE=/d' expose_enclave.sh 2>/dev/null || true
         sed -i '/echo.*secrets\.json/d' expose_enclave.sh 2>/dev/null || true
     fi
+    
+    # For seal example, add empty secrets.json and expose port 3001
+    if [ "$IS_SEAL_EXAMPLE" = true ]; then
+        echo "Adding seal-specific configuration to expose_enclave.sh..."
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sed -i '' "/# Secrets-block/a\\
+# For seal example, create empty secrets.json for compatibility\\
+echo '{}' > secrets.json\\
+" expose_enclave.sh
+            
+            # Add port 3001 exposure after port 3000
+            sed -i '' "/socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3000 &/a\\
+\\
+# Expose port 3001 for localhost access only (seal init endpoint)\\
+echo \"Exposing seal init endpoint on localhost:3001...\"\\
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3001 &\\
+" expose_enclave.sh
+        else
+            sed -i "/# Secrets-block/a\\
+# For seal example, create empty secrets.json for compatibility\\
+echo '{}' > secrets.json" expose_enclave.sh
+            
+            # Add port 3001 exposure after port 3000
+            sed -i "/socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3000 &/a\\
+\\
+# Expose port 3001 for localhost access only (seal init endpoint)\\
+echo \"Exposing seal init endpoint on localhost:3001...\"\\
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3001 &" expose_enclave.sh
+        fi
+    fi
 fi
 
 
@@ -577,5 +624,19 @@ echo "[*] Commit the code generated in expose_enclave.sh and src/nautilus-server
 echo "[*] Please wait 2-3 minutes for the instance to finish the init script before sshing into it."
 echo "[*] ssh inside the launched EC2 instance. e.g. \`ssh ec2-user@\"$PUBLIC_IP\"\` assuming the ssh-key is loaded into the agent."
 echo "[*] Clone or copy the repo with the above generated code."
-echo "[*] Inside repo directory: 'make EXAMPLE=<EXAMPLE>' and then 'make run'"
+echo "[*] Inside repo directory: 'make EXAMPLE=$EXAMPLE' and then 'make run'"
 echo "[*] Run expose_enclave.sh from within the EC2 instance to expose the enclave to the internet."
+
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    echo ""
+    echo "=== SEAL EXAMPLE INSTRUCTIONS ==="
+    echo "[*] After running expose_enclave.sh, initialize the enclave with encrypted secrets:"
+    echo "    ./src/nautilus-server/target/debug/seal-init-client \\"
+    echo "        --api-key <YOUR_API_KEY> \\"
+    echo "        --package-id <PACKAGE_ID> \\"
+    echo "        --key-servers <KEY_SERVER_IDS> \\"
+    echo "        --threshold <THRESHOLD>"
+    echo ""
+    echo "[*] You can add multiple secrets by calling the endpoint multiple times."
+    echo "[*] The init endpoint is exposed on localhost:3001 for host-only access."
+fi
