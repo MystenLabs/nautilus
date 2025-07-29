@@ -9,7 +9,7 @@ This example demonstrates how to pass encrypted secrets to the enclave using Sea
 ./configure_enclave.sh seal
 
 # SSH into the instance and build
-make EXAMPLE=seal
+make EXAMPLE=seal-example
 make run
 
 ```

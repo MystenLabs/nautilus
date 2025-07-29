@@ -7,6 +7,7 @@ use axum::response::Response;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
+use std::fmt;
 
 mod examples {
     #[cfg(feature = "twitter")]
@@ -58,3 +59,13 @@ impl IntoResponse for EnclaveError {
 pub enum EnclaveError {
     GenericError(String),
 }
+
+impl fmt::Display for EnclaveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EnclaveError::GenericError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl std::error::Error for EnclaveError {}
