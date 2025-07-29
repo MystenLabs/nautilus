@@ -448,6 +448,18 @@ sudo systemctl start docker && sudo systemctl enable docker
 sudo systemctl enable nitro-enclaves-vsock-proxy.service
 EOF
 
+# Add Rust installation for seal example only
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    cat <<'EOF' >> user-data.sh
+
+# Install Rust and cargo for seal example
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | su - ec2-user -c "sh -s -- -y"
+echo 'source $HOME/.cargo/env' >> /home/ec2-user/.bashrc
+EOF
+fi
+
+cat <<'EOF' >> user-data.sh
+
 # Append endpoint configuration to the vsock-proxy YAML if endpoints were provided.
 if [ -n "$ENDPOINTS" ]; then
     for ep in $ENDPOINTS; do
