@@ -8,7 +8,8 @@ use std::fs;
 use std::path::Path;
 
 // Import from the parent crate
-use nautilus_server::examples::seal_example::seal_sdk::{fetch_key_server_urls, seal_encrypt, IBEPublicKeys, EncryptionInput};
+use nautilus_server::examples::seal_example::seal_sdk::{fetch_key_server_urls, seal_encrypt, IBEPublicKeys, EncryptionInput, SessionCertificate};
+use fastcrypto::encoding::{Base64, Encoding};
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -46,12 +47,6 @@ pub struct InitRequest {
     pub enclave_object_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CompleteRequest {
-    pub session_id: String,
-    pub encrypted_object: EncryptedObject,
-    pub seal_responses: Vec<Value>,
-}
 
 #[derive(Debug, Deserialize)]
 struct SealConfig {
@@ -107,6 +102,26 @@ enum Commands {
         /// BCS hex string of the encrypted object (from encrypt command output)
         #[arg(short = 'e', long)]
         encrypted_object: String,
+        
+        /// Programmable Transaction Block bytes (base64, without the first byte)
+        #[arg(long)]
+        ptb: String,
+        
+        /// Ephemeral public key (base64)
+        #[arg(long)]
+        enc_key: String,
+        
+        /// Ephemeral verification key (base64)
+        #[arg(long)]
+        enc_verification_key: String,
+        
+        /// Request signature (base64)
+        #[arg(long)]
+        request_signature: String,
+        
+        /// Certificate (JSON string)
+        #[arg(long)]
+        certificate: String,
         
         /// Sui RPC URL (default: testnet)
         #[arg(long)]
@@ -208,6 +223,11 @@ async fn handle_fetch_keys(
     config_path: String,
     enclave_url: String,
     encrypted_object_hex: String,
+    ptb: String,
+    enc_key: String,
+    enc_verification_key: String,
+    request_signature: String,
+    certificate: String,
     sui_rpc: Option<String>,
     output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -252,12 +272,19 @@ async fn handle_fetch_keys(
     // Step 2: Fetch keys from Seal servers
     println!("\nStep 2: Fetching keys from Seal servers...");
     
-    // Create request body for key servers
+    // Decode certificate from base64 BCS
+    let certificate_bcs = Base64::decode(&certificate)
+        .map_err(|e| format!("Failed to decode certificate base64: {}", e))?;
+    let certificate_struct: SessionCertificate = bcs::from_bytes(&certificate_bcs)
+        .map_err(|e| format!("Failed to decode certificate BCS: {}", e))?;
+    
+    // Create request body for key servers (matching TypeScript SDK format)
     let request_body = serde_json::json!({
-        "session_id": session_id,
-        "package_id": config.package_id,
-        "enclave_object_id": enclave_object_id,
-        "encrypted_object": encrypted_object
+        "ptb": ptb,
+        "enc_key": enc_key,
+        "enc_verification_key": enc_verification_key,
+        "request_signature": request_signature,
+        "certificate": certificate_struct
     });
     
     let mut seal_responses = Vec::new();
@@ -300,36 +327,18 @@ async fn handle_fetch_keys(
         ).into());
     }
     
-    // Step 3: Send responses to enclave /complete endpoint
-    println!("\nStep 3: Completing parameter load with enclave...");
-    let complete_request = CompleteRequest {
-        session_id,
-        encrypted_object,
-        seal_responses,
-    };
+    println!("\n✓ Successfully fetched {} seal responses", seal_responses.len());
     
-    let complete_response = client
-        .post(format!("{}/seal/complete_parameter_load", enclave_url))
-        .json(&complete_request)
-        .send()
-        .await?;
-    
-    if !complete_response.status().is_success() {
-        return Err(format!("Complete failed: {}", complete_response.text().await?).into());
-    }
-    
-    let result: Value = complete_response.json().await?;
-    
-    println!("\n✓ Successfully completed key fetch process");
-    
-    // Save or print result
+    // Print the seal responses
     if let Some(output_path) = output {
-        let json = serde_json::to_string_pretty(&result)?;
+        let json = serde_json::to_string_pretty(&seal_responses)?;
         fs::write(&output_path, json)?;
-        println!("Result saved to: {}", output_path);
+        println!("Seal responses saved to: {}", output_path);
     } else {
-        println!("\nResult:");
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        println!("\nSeal responses:");
+        for (i, response) in seal_responses.iter().enumerate() {
+            println!("Response {}: {}", i + 1, serde_json::to_string_pretty(response)?);
+        }
     }
     
     Ok(())
@@ -354,10 +363,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config,
             enclave_url,
             encrypted_object,
+            ptb,
+            enc_key,
+            enc_verification_key,
+            request_signature,
+            certificate,
             sui_rpc,
             output,
         } => {
-            handle_fetch_keys(session_id, config, enclave_url, encrypted_object, sui_rpc, output).await?;
+            handle_fetch_keys(session_id, config, enclave_url, encrypted_object, ptb, enc_key, enc_verification_key, request_signature, certificate, sui_rpc, output).await?;
         }
     }
     

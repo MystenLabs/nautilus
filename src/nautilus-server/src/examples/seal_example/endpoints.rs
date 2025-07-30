@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{KeyPair, ToFromBytes, Signer};
-use fastcrypto::encoding::Encoding;
+use fastcrypto::encoding::{Encoding, Base64};
 
 use super::seal_sdk::*;
 
@@ -97,25 +97,28 @@ pub async fn init_parameter_load(
     )?;
     let ptb_base64 = fastcrypto::encoding::Base64::encode(&ptb_bytes);
     
-    // Create certificate signature - wallet signs session key info
-    let cert_msg = format!(
-        "{}|{}|{}|{}",
-        hex::encode(&session_vk),
+    // Create certificate signature using the correct signed_message format
+    let cert_message = format!(
+        "Accessing keys of package {} for {} mins from {}, session key {}",
         request.package_id,
         ttl_min,
-        current_time
+        chrono::DateTime::<chrono::Utc>::from_timestamp((current_time / 1000) as i64, 0)
+            .expect("valid timestamp"),
+        hex::encode(&session_vk)
     );
-    let cert_signature: fastcrypto::ed25519::Ed25519Signature = wallet.sign(cert_msg.as_bytes());
+    let cert_signature: fastcrypto::ed25519::Ed25519Signature = wallet.sign(cert_message.as_bytes());
     let cert_signature = cert_signature.as_bytes().to_vec();
     
-    // Create request signature - session key signs the request
-    let request_msg = format!(
-        "{}|{}|{}",
-        ptb_base64,
-        hex::encode(&eph_pk),
-        hex::encode(&eph_pk), // enc_verification_key
-    );
-    let request_signature: fastcrypto::ed25519::Ed25519Signature = state.eph_kp.sign(request_msg.as_bytes());
+    // Create request signature using the correct signed_request format
+    // BCS encode each component then BCS encode the struct
+    let request_format = RequestFormat {
+        ptb: ptb_bytes.clone(),
+        enc_key: bcs::to_bytes(&eph_pk).map_err(|e| EnclaveError::GenericError(format!("Failed to serialize enc_key: {}", e)))?,
+        enc_verification_key: bcs::to_bytes(&eph_pk).map_err(|e| EnclaveError::GenericError(format!("Failed to serialize enc_verification_key: {}", e)))?,
+    };
+    let request_message = bcs::to_bytes(&request_format)
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to serialize request format: {}", e)))?;
+    let request_signature: fastcrypto::ed25519::Ed25519Signature = state.eph_kp.sign(&request_message);
     let request_signature = request_signature.as_bytes().to_vec();
     
     // Store ephemeral session
@@ -136,21 +139,26 @@ pub async fn init_parameter_load(
         storage.insert(request.session_id.clone(), ephemeral_session);
     }
     
-    // Build response
+    // Build CLI-ready response with base64 encoded values
+    let certificate = SessionCertificate {
+        address: wallet_address,
+        session_vk: session_vk.clone(),
+        creation_time: current_time,
+        ttl_min,
+        signature: cert_signature.clone(),
+    };
+    
+    // BCS encode certificate then base64 encode
+    let certificate_bcs = bcs::to_bytes(&certificate)
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to BCS encode certificate: {}", e)))?;
+    let certificate_b64 = Base64::encode(certificate_bcs);
+    
     let response = InitParameterLoadResponse {
-        request_body: SealRequestBody {
-            ptb: ptb_base64,
-            enc_key: eph_pk.clone(),
-            enc_verification_key: eph_pk,
-            request_signature,
-            certificate: SessionCertificate {
-                address: wallet_address,
-                session_vk,
-                creation_time: current_time,
-                ttl_min,
-                signature: cert_signature,
-            },
-        },
+        ptb: ptb_base64,
+        enc_key: Base64::encode(&eph_pk),
+        enc_verification_key: Base64::encode(&eph_pk),
+        request_signature: Base64::encode(&request_signature),
+        certificate: certificate_b64,
     };
     
     Ok(Json(response))

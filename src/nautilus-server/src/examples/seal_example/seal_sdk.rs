@@ -92,10 +92,14 @@ pub struct InitParameterLoadRequest {
     pub enclave_object_id: String, // The enclave object ID on chain
 }
 
-/// Response structure for init_parameter_load
+/// Response structure for init_parameter_load - CLI-ready parameters
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitParameterLoadResponse {
-    pub request_body: SealRequestBody,
+    pub ptb: String,                    // Base64 encoded PTB
+    pub enc_key: String,                // Base64 encoded ephemeral public key
+    pub enc_verification_key: String,   // Base64 encoded ephemeral verification key
+    pub request_signature: String,      // Base64 encoded request signature
+    pub certificate: String,            // JSON string of certificate
 }
 
 /// Request body structure for Seal key servers
@@ -116,6 +120,14 @@ pub struct SessionCertificate {
     pub creation_time: u64,
     pub ttl_min: u64,
     pub signature: Vec<u8>, // Wallet's personal message signature
+}
+
+/// Request format for signing (matches TypeScript SDK)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RequestFormat {
+    pub ptb: Vec<u8>,
+    pub enc_key: Vec<u8>,
+    pub enc_verification_key: Vec<u8>,
 }
 
 /// Request structure for complete_parameter_load
