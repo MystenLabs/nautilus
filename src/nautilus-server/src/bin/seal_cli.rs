@@ -7,53 +7,19 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-// Import from the parent crate
-use nautilus_server::examples::seal_example::seal_sdk::{fetch_key_server_urls, seal_encrypt, IBEPublicKeys, EncryptionInput, SessionCertificate};
-use fastcrypto::encoding::{Base64, Encoding};
-
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptedObject {
-    pub version: u8,
-    pub package_id: [u8; 32],
-    pub id: Vec<u8>,
-    pub services: Vec<([u8; 32], u8)>,
-    pub threshold: u8,
-    pub encrypted_shares: IBEEncryptions,
-    pub ciphertext: Ciphertext,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum IBEEncryptions {
-    BonehFranklinBLS12381 {
-        nonce: Vec<u8>,
-        encrypted_shares: Vec<Vec<u8>>,
-        encrypted_randomness: Vec<u8>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Ciphertext {
-    Aes256Gcm { blob: Vec<u8>, aad: Option<Vec<u8>> },
-    Hmac256Ctr { blob: Vec<u8>, aad: Option<Vec<u8>>, mac: [u8; 32] },
-    Plain,
-}
-
-
+use seal_crypto::{seal_encrypt, EncryptionInput, IBEPublicKeys};
+use seal_crypto::ibe::PublicKey as IBEPublicKey;
+use fastcrypto::serde_helpers::ToFromByteArray;
+use sui_types::base_types::ObjectID;
+use nautilus_server::app::types::{fetch_key_server_urls, SealConfig};
+use seal_key_server::types::FetchKeyRequest;
+use fastcrypto::encoding::Hex;
+use fastcrypto::encoding::Encoding;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitRequest {
     pub session_id: String,
     pub package_id: String,
     pub enclave_object_id: String,
-}
-
-
-#[derive(Debug, Deserialize)]
-struct SealConfig {
-    package_id: String,
-    key_servers: Vec<String>,
-    threshold: u8,
-    enclave_object_id: Option<String>,
 }
 
 
@@ -79,79 +45,29 @@ enum Commands {
         /// Path to seal_config.yaml file
         #[arg(short = 'c', long, default_value = "./seal_config.yaml")]
         config: String,
-        
-        /// Output file for encrypted object
-        #[arg(short = 'o', long)]
-        output: Option<String>,
     },
     
-    /// Fetch keys from Seal servers and decrypt
+    /// Fetch keys from Seal servers using hex blob from init response
     FetchKeys {
-        /// Session ID for this request
-        #[arg(short = 's', long)]
-        session_id: String,
+        /// Hex-encoded BCS blob containing all parameters (from init response)
+        #[arg(value_name = "HEX_BLOB")]
+        params_hex: String,
         
-        /// Path to seal_config.yaml file
-        #[arg(short = 'c', long, default_value = "./seal_config.yaml")]
-        config: String,
+        /// Path to seal_config.yaml file (optional, will be extracted from blob if not provided)
+        #[arg(short = 'c', long)]
+        config: Option<String>,
         
-        /// Enclave host URL
-        #[arg(long, default_value = "http://localhost:3001")]
-        enclave_url: String,
-        
-        /// BCS hex string of the encrypted object (from encrypt command output)
-        #[arg(short = 'e', long)]
-        encrypted_object: String,
-        
-        /// Programmable Transaction Block bytes (base64, without the first byte)
-        #[arg(long)]
-        ptb: String,
-        
-        /// Ephemeral public key (base64)
-        #[arg(long)]
-        enc_key: String,
-        
-        /// Ephemeral verification key (base64)
-        #[arg(long)]
-        enc_verification_key: String,
-        
-        /// Request signature (base64)
-        #[arg(long)]
-        request_signature: String,
-        
-        /// Certificate (JSON string)
-        #[arg(long)]
-        certificate: String,
-        
-        /// Sui RPC URL (default: testnet)
+        /// Sui RPC URL (optional, default: testnet)
         #[arg(long)]
         sui_rpc: Option<String>,
         
-        /// Output file for the decrypted result
-        #[arg(short = 'o', long)]
-        output: Option<String>,
     },
 }
-
-/// Parse a hex string into a 32-byte array
-fn parse_object_id(hex_str: &str) -> Result<[u8; 32], String> {
-    let hex_str = hex_str.trim_start_matches("0x");
-    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
-    if bytes.len() != 32 {
-        return Err(format!("ObjectID must be 32 bytes, got {}", bytes.len()));
-    }
-    let mut arr = [0u8; 32];
-    arr.copy_from_slice(&bytes);
-    Ok(arr)
-}
-
-
 
 async fn handle_encrypt(
     secret: String,
     key_name: String,
     config_path: String,
-    output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load config file
     let config: SealConfig = if Path::new(&config_path).exists() {
@@ -163,43 +79,49 @@ async fn handle_encrypt(
         return Err(format!("Config file not found: {}", config_path).into());
     };
     
-    let package_id = parse_object_id(&config.package_id)?;
+    let package_id = ObjectID::from_hex_literal(&config.package_id)
+        .map_err(|e| format!("Invalid package ID: {}", e))?;
     
-    // Parse key servers
     let key_servers: Vec<[u8; 32]> = config.key_servers
         .iter()
-        .map(|s| parse_object_id(s.trim()))
+        .map(|s| {
+            ObjectID::from_hex_literal(s.trim())
+                .map(|id| id.into_bytes())
+                .map_err(|e| format!("Invalid key server ID: {}", e))
+        })
         .collect::<Result<Vec<_>, _>>()?;
-
-    if key_servers.len() < config.threshold as usize {
-        return Err("Number of key servers must be >= threshold".into());
-    }
 
     println!("Encrypting secret with Seal parameters:");
     println!("  Secret name: {}", key_name);
-    println!("  Package ID: 0x{}", hex::encode(&package_id));
+    println!("  Package ID: {}", package_id);
     println!("  Key servers: {}", key_servers.len());
     println!("  Threshold: {}", config.threshold);
 
-    // Create mock public keys (in production, these would be real IBE public keys)
-    let public_keys = IBEPublicKeys::BonehFranklinBLS12381(
-        key_servers.iter().map(|_| vec![0u8; 48]).collect()
-    );
+    let pks: Vec<IBEPublicKey> = config.public_keys
+        .iter()
+        .map(|pk_hex| -> Result<IBEPublicKey, Box<dyn std::error::Error>> {
+            let bytes = Hex::decode(pk_hex).map_err(|e| format!("Invalid public key hex: {}", e))?;
+            let pk = seal_crypto::ibe::PublicKey::from_byte_array(&bytes.try_into().map_err(|_| "Invalid public key length")?)?;
+            Ok(pk)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let public_keys = IBEPublicKeys::BonehFranklinBLS12381(pks);
 
     // Encrypt the secret
     let encryption_input = EncryptionInput::Aes256Gcm {
         data: secret.as_bytes().to_vec(),
-        aad: Some(key_name.as_bytes().to_vec()),
+        aad: None,
     };
 
     let encrypted_object = seal_encrypt(
         package_id,
         key_name.as_bytes().to_vec(),
-        key_servers,
+        key_servers.into_iter().map(|bytes| ObjectID::from_bytes(bytes).unwrap()).collect(),
         &public_keys,
         config.threshold,
         encryption_input,
-    )?;
+    ).map_err(|e| format!("Encryption failed: {}", e))?;
 
     println!("\n✓ Successfully encrypted secret '{}'", key_name);
     
@@ -208,53 +130,32 @@ async fn handle_encrypt(
     println!("\nEncrypted object (BCS hex):");
     println!("{}", hex::encode(&bcs_bytes));
     
-    // Save to file if output specified
-    if let Some(output_path) = output {
-        // Save as BCS bytes (hex format)
-        fs::write(&output_path, hex::encode(&bcs_bytes))?;
-        println!("\nBCS hex saved to: {}", output_path);
-    }
-    
     Ok(())
 }
 
 async fn handle_fetch_keys(
-    session_id: String,
-    config_path: String,
-    enclave_url: String,
-    encrypted_object_hex: String,
-    ptb: String,
-    enc_key: String,
-    enc_verification_key: String,
-    request_signature: String,
-    certificate: String,
+    params_hex: String,
+    config_path: Option<String>,
     sui_rpc: Option<String>,
-    output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Load config file
-    let config: SealConfig = if Path::new(&config_path).exists() {
-        let config_str = fs::read_to_string(&config_path)
+    // Decode the FetchKeyRequest from hex
+    let request_bytes = hex::decode(params_hex.trim())
+        .map_err(|e| format!("Invalid hex encoding: {}", e))?;
+    let request: FetchKeyRequest = bcs::from_bytes(&request_bytes)
+        .map_err(|e| format!("Failed to parse FetchKeyRequest from BCS: {}", e))?;
+    
+    // Load config file if provided, otherwise use default
+    let config_file = config_path.unwrap_or_else(|| "./seal_config.yaml".to_string());
+    let config: SealConfig = if Path::new(&config_file).exists() {
+        let config_str = fs::read_to_string(&config_file)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
         serde_yaml::from_str(&config_str)
             .map_err(|e| format!("Failed to parse config file: {}", e))?
     } else {
-        return Err(format!("Config file not found: {}", config_path).into());
+        return Err(format!("Config file not found: {}", config_file).into());
     };
     
-    // Parse the encrypted object from BCS hex
-    let bcs_bytes = hex::decode(encrypted_object_hex.trim())
-        .map_err(|e| format!("Invalid encrypted object hex: {}", e))?;
-    let encrypted_object: EncryptedObject = bcs::from_bytes(&bcs_bytes)
-        .map_err(|e| format!("Failed to parse encrypted object BCS: {}", e))?;
-    
-    let enclave_object_id = config.enclave_object_id
-        .ok_or("enclave_object_id not found in config")?;
-    
-    println!("Fetching Seal keys:");
-    println!("  Session ID: {}", session_id);
-    println!("  Package ID: {}", hex::encode(&encrypted_object.package_id));
-    println!("  Object ID: {}", String::from_utf8_lossy(&encrypted_object.id));
-    println!("  Enclave URL: {}", enclave_url);
+    println!("Fetching Seal keys...");
     
     let client = reqwest::Client::new();
     
@@ -272,21 +173,6 @@ async fn handle_fetch_keys(
     // Step 2: Fetch keys from Seal servers
     println!("\nStep 2: Fetching keys from Seal servers...");
     
-    // Decode certificate from base64 BCS
-    let certificate_bcs = Base64::decode(&certificate)
-        .map_err(|e| format!("Failed to decode certificate base64: {}", e))?;
-    let certificate_struct: SessionCertificate = bcs::from_bytes(&certificate_bcs)
-        .map_err(|e| format!("Failed to decode certificate BCS: {}", e))?;
-    
-    // Create request body for key servers (matching TypeScript SDK format)
-    let request_body = serde_json::json!({
-        "ptb": ptb,
-        "enc_key": enc_key,
-        "enc_verification_key": enc_verification_key,
-        "request_signature": request_signature,
-        "certificate": certificate_struct
-    });
-    
     let mut seal_responses = Vec::new();
     for server in &key_servers {
         println!("  Fetching from {} ({}/v1/fetch_key)", server.name, server.url);
@@ -294,7 +180,7 @@ async fn handle_fetch_keys(
             .post(format!("{}/v1/fetch_key", server.url))
             .header("Client-Sdk-Type", "rust")
             .header("Client-Sdk-Version", "1.0.0")
-            .json(&request_body)
+            .json(&request)
             .send()
             .await
         {
@@ -329,16 +215,9 @@ async fn handle_fetch_keys(
     
     println!("\n✓ Successfully fetched {} seal responses", seal_responses.len());
     
-    // Print the seal responses
-    if let Some(output_path) = output {
-        let json = serde_json::to_string_pretty(&seal_responses)?;
-        fs::write(&output_path, json)?;
-        println!("Seal responses saved to: {}", output_path);
-    } else {
-        println!("\nSeal responses:");
-        for (i, response) in seal_responses.iter().enumerate() {
-            println!("Response {}: {}", i + 1, serde_json::to_string_pretty(response)?);
-        }
+    println!("\nSeal responses:");
+    for (i, response) in seal_responses.iter().enumerate() {
+        println!("Response {}: {}", i + 1, serde_json::to_string_pretty(response)?);
     }
     
     Ok(())
@@ -353,49 +232,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             secret,
             key_name,
             config,
-            output,
         } => {
-            handle_encrypt(secret, key_name, config, output).await?;
+            handle_encrypt(secret, key_name, config).await?;
         }
         
         Commands::FetchKeys {
-            session_id,
+            params_hex,
             config,
-            enclave_url,
-            encrypted_object,
-            ptb,
-            enc_key,
-            enc_verification_key,
-            request_signature,
-            certificate,
             sui_rpc,
-            output,
         } => {
-            handle_fetch_keys(session_id, config, enclave_url, encrypted_object, ptb, enc_key, enc_verification_key, request_signature, certificate, sui_rpc, output).await?;
+            handle_fetch_keys(params_hex, config, sui_rpc).await?;
         }
     }
     
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_object_id() {
-        // Test with 0x prefix
-        let id = parse_object_id("0x0000000000000000000000000000000000000000000000000000000000000001");
-        assert!(id.is_ok());
-        assert_eq!(id.unwrap()[31], 1);
-
-        // Test without 0x prefix
-        let id = parse_object_id("0000000000000000000000000000000000000000000000000000000000000001");
-        assert!(id.is_ok());
-        assert_eq!(id.unwrap()[31], 1);
-
-        // Test invalid length
-        let id = parse_object_id("0x00");
-        assert!(id.is_err());
-    }
 }

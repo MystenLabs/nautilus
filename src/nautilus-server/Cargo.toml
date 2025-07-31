@@ -33,10 +33,14 @@ nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev 
 bcs = "0.1.6"
 lazy_static = "1.4"
 hex = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
 clap = { version = "4.0", features = ["derive"] }
 sui-sdk = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 sui-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
+shared_crypto = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", package = "shared-crypto" }
+seal-crypto = { git = "https://github.com/MystenLabs/seal", rev = "5d73f26c2fb96a5ef5a8076d2fb8565218fd2a6d", package = "crypto" }
+seal-key-server = { git = "https://github.com/MystenLabs/seal", rev = "5d73f26c2fb96a5ef5a8076d2fb8565218fd2a6d", package = "key-server" }
 regex = { version = "1.5", optional = true }
 
 [features]

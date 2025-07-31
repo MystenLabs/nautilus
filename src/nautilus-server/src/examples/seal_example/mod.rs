@@ -1,10 +1,11 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod seal_sdk;
 pub mod endpoints;
+pub mod types;
 
 pub use endpoints::{init_parameter_load, complete_parameter_load};
+pub use types::*;
 
 use crate::common::IntentMessage;
 use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
@@ -95,7 +96,7 @@ pub async fn ping() -> Json<PingResponse> {
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/ping", get(ping))
-        .route("/seal/init_parameter_load", post(init_parameter_load))
+        .route("/seal/init_parameter_load", get(init_parameter_load))
         .route("/seal/complete_parameter_load", post(complete_parameter_load))
         .with_state(state);
 

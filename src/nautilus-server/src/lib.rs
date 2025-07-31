@@ -30,7 +30,7 @@ pub mod app {
     #[cfg(feature = "seal-example")]
     pub use crate::examples::seal_example::{
         init_parameter_load, complete_parameter_load, ping, spawn_host_init_server,
-        PingResponse, seal_sdk, process_data
+        PingResponse, types
     };
 }
 
