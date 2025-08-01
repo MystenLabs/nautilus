@@ -41,7 +41,7 @@ enum Commands {
         key_name: String,
 
         /// Path to seal_config.yaml file
-        #[arg(short = 'c', long, default_value = "./seal_config.yaml")]
+        #[arg(short = 'c', long)]
         config: String,
     },
 
@@ -52,7 +52,7 @@ enum Commands {
         fetch_keys_request: String,
 
         /// Path to seal_config.yaml file
-        #[arg(short = 'c', long, default_value = "./seal_config.yaml")]
+        #[arg(short = 'c', long)]
         config: String,
     },
 }
@@ -146,6 +146,7 @@ async fn handle_fetch_keys(
     let request: FetchKeyRequest = bcs::from_bytes(&bytes)
         .map_err(|e| format!("Failed to parse FetchKeyRequest from BCS: {}", e))?;
 
+    println!("fetch_keys_request: {:?}", serde_json::to_string(&request).unwrap());
     let config: SealConfig = if Path::new(&config_path).exists() {
         let config_str = fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
@@ -191,6 +192,7 @@ async fn handle_fetch_keys(
                     let response_bytes = response.bytes().await.unwrap();
                     let response: FetchKeyResponse = serde_json::from_slice(&response_bytes)
                         .expect("Failed to deserialize response");
+                    println!("response: {:?}", serde_json::to_string(&response).unwrap());
                     seal_responses.push(response);
                     println!("    ✓ Success");
                 } else {

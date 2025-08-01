@@ -30,10 +30,9 @@ lazy_static::lazy_static! {
         Arc::new(RwLock::new(sui_kp))
     };
     pub static ref SEAL_CONFIG: SealConfig = {
-        let config_path = "src/examples/seal_example/seal_config.yaml";
-        let config_str = std::fs::read_to_string(config_path)
-            .expect("Failed to read seal_config.yaml");
-        serde_yaml::from_str(&config_str)
+        let config_str = include_str!("seal_config.yaml");
+        println!("config_str: {}", config_str);
+        serde_yaml::from_str(config_str)
             .expect("Failed to parse seal_config.yaml")
     };
     pub static ref ENC_SECRET: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
