@@ -39,8 +39,8 @@ sui-sdk = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional
 sui-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 shared_crypto = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", package = "shared-crypto" }
-seal-crypto = { git = "https://github.com/MystenLabs/seal", rev = "5d73f26c2fb96a5ef5a8076d2fb8565218fd2a6d", package = "crypto" }
-seal-key-server = { git = "https://github.com/MystenLabs/seal", rev = "5d73f26c2fb96a5ef5a8076d2fb8565218fd2a6d", package = "key-server" }
+seal-crypto = { git = "https://github.com/MystenLabs/seal", rev = "7ffad8191f37171da6fd1ede4ef3dcb04f5989f9", package = "crypto" }
+seal-key-server = { git = "https://github.com/MystenLabs/seal", rev = "7ffad8191f37171da6fd1ede4ef3dcb04f5989f9", package = "key-server" }
 regex = { version = "1.5", optional = true }
 
 [features]

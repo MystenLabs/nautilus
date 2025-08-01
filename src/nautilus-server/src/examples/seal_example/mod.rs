@@ -4,7 +4,7 @@
 pub mod endpoints;
 pub mod types;
 
-pub use endpoints::{init_parameter_load, complete_parameter_load};
+pub use endpoints::{complete_parameter_load, init_parameter_load};
 pub use types::*;
 
 use crate::common::IntentMessage;
@@ -13,10 +13,32 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
+use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::traits::KeyPair;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use sui_types::crypto::SuiKeyPair;
+use tokio::sync::RwLock;
 use tracing::info;
+type ElGamalSecretKey = seal_crypto::elgamal::SecretKey<fastcrypto::groups::bls12381::G1Element>;
+
+lazy_static::lazy_static! {
+    pub static ref SEAL_WALLET: Arc<RwLock<sui_types::crypto::SuiKeyPair>> = {
+        let ed25519_kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
+        let sui_kp = SuiKeyPair::Ed25519(ed25519_kp);
+        Arc::new(RwLock::new(sui_kp))
+    };
+    pub static ref SEAL_CONFIG: SealConfig = {
+        let config_path = "src/examples/seal_example/seal_config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .expect("Failed to read seal_config.yaml");
+        serde_yaml::from_str(&config_str)
+            .expect("Failed to parse seal_config.yaml")
+    };
+    pub static ref ENC_SECRET: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
+    pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
+}
 
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,8 +57,13 @@ pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
 ) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError> {
-    let api_key = state.api_key.clone();
-    
+    let api_key_guard = SEAL_API_KEY.read().await;
+    let api_key = api_key_guard.as_ref().ok_or_else(|| {
+        EnclaveError::GenericError(
+            "API key not initialized. Please complete parameter load first.".to_string(),
+        )
+    })?;
+
     let url = format!(
         "https://api.weatherapi.com/v1/current.json?key={}&q={}",
         api_key, request.payload.location
@@ -75,7 +102,10 @@ pub async fn process_data(
 }
 
 /// Host-only init functionality
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use tokio::net::TcpListener;
 
 /// Response for the ping endpoint
@@ -97,15 +127,21 @@ pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveE
     let host_app = Router::new()
         .route("/ping", get(ping))
         .route("/seal/init_parameter_load", get(init_parameter_load))
-        .route("/seal/complete_parameter_load", post(complete_parameter_load))
+        .route(
+            "/seal/complete_parameter_load",
+            post(complete_parameter_load),
+        )
         .with_state(state);
 
-    let host_listener = TcpListener::bind("0.0.0.0:3001")
-        .await
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to bind host init server: {}", e)))?;
-    
-    info!("Host-only init server listening on {}", host_listener.local_addr().unwrap());
-    
+    let host_listener = TcpListener::bind("0.0.0.0:3001").await.map_err(|e| {
+        EnclaveError::GenericError(format!("Failed to bind host init server: {}", e))
+    })?;
+
+    info!(
+        "Host-only init server listening on {}",
+        host_listener.local_addr().unwrap()
+    );
+
     tokio::spawn(async move {
         axum::serve(host_listener, host_app.into_make_service())
             .await
@@ -121,6 +157,7 @@ mod test {
     use crate::common::IntentMessage;
     use axum::{extract::State, Json};
     use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
+    use tokio::sync::RwLock;
 
     #[tokio::test]
     async fn test_process_data() {
