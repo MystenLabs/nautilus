@@ -4325,7 +4325,6 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "axum 0.7.9",
  "bcs",
- "chrono",
  "clap",
  "crypto",
  "fastcrypto 0.1.8",
