@@ -95,7 +95,7 @@ echo "Instance will be named: $FINAL_INSTANCE_NAME"
 #########################################
 if [ -f "src/nautilus-server/allowed_endpoints.yaml" ]; then
     # Use a small Python snippet to parse the YAML and emit space-separated endpoints
-    ENDPOINTS=$(yq e '.endpoints | join(" ")' src/nautilus-server/allowed_endpoints.yaml 2>/dev/null)
+    ENDPOINTS=$(yq '.endpoints[]' src/nautilus-server/allowed_endpoints.yaml 2>/dev/null)
     if [ -n "$ENDPOINTS" ]; then
         echo "Endpoints found in src/nautilus-server/allowed_endpoints.yaml (before region patching):"
         echo "$ENDPOINTS"
