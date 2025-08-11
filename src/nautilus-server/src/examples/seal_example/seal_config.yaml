@@ -1,7 +1,7 @@
 # Seal configuration for nautilus enclave
 
 # package that contains seal_policy module that implements seal_approve
-package_id: "0xfac83e77c9e1530898242a557c414c7a83e98d684a258e7e90c729b3fd74e6d5"
+package_id: "0x1997615285f7e20c01f1917392eb48c561d54fdf358ac7e4a039af5d0da26430"
 
 key_servers:
   - "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75"
