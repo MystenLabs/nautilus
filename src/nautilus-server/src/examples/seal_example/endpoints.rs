@@ -7,6 +7,7 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
+use sui_types::object::Owner;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use std::str::FromStr;
 use sui_sdk::SuiClientBuilder;
@@ -183,14 +184,39 @@ async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: Obje
     println!("package_id: {:?}", package_id);
     println!("enclave_object_id: {:?}", enclave_object_id);
     // id arg, can be anything
-    let id_arg = builder.pure("weather_api_key".as_bytes()).unwrap();
+    let id_arg = builder.pure("weather_api_key".as_bytes().to_vec()).unwrap();
 
-    // enclave arg
+    // enclave arg - Enclave is a shared object
     let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
-    let object_response = sui_client.read_api().get_object_with_options(enclave_object_id, sui_sdk::rpc_types::SuiObjectDataOptions::new().with_owner()).await?;
-    let object_ref = object_response.data.ok_or("Object not found")?.object_ref();
-    println!("object_ref: {:?}", object_ref);
-    let enclave_arg = builder.obj(ObjectArg::ImmOrOwnedObject(object_ref)).unwrap();
+    let object_response = sui_client.read_api().get_object_with_options(
+        enclave_object_id, 
+        sui_sdk::rpc_types::SuiObjectDataOptions::new()
+            .with_owner()
+            .with_previous_transaction()
+    ).await?;
+    let object_data = object_response.data.ok_or("Object not found")?;
+    
+    // Get the initial shared version for the shared object
+    let initial_shared_version = if let Some(owner) = &object_data.owner {
+        match owner {
+            Owner::Shared { initial_shared_version } => {
+                initial_shared_version.value()
+            }
+            _ => {
+                return Err(format!("Object {} is not a shared object, owner: {:?}", enclave_object_id, owner).into());
+            }
+        }
+    } else {
+        return Err(format!("Could not determine owner for object {}", enclave_object_id).into());
+    };
+    
+    println!("object_ref: {:?}", object_data.object_ref());
+    println!("initial_shared_version: {}", initial_shared_version);
+    let enclave_arg = builder.obj(ObjectArg::SharedObject {
+        id: enclave_object_id,
+        initial_shared_version: initial_shared_version.into(),
+        mutable: false,
+    }).unwrap();
 
     // signature arg, commits to seal wallet address
     let wallet_guard = SEAL_WALLET.read().await;
@@ -198,6 +224,10 @@ async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: Obje
     let wallet_address: SuiAddress = (&public_key).into();
     let signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
     let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
+    println!("sig: {:?}", Hex::encode(sig.as_bytes()));
+    println!("eph pk: {:?}", Hex::encode(eph_kp.public().as_bytes()));
+    println!("signing_payload: {:?}", Hex::encode(signing_payload));
+
     let signature_arg = builder.pure(sig.as_bytes()).unwrap();
 
     // Create the type parameter

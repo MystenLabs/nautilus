@@ -11,7 +11,6 @@ pub struct SealConfig {
     pub key_servers: Vec<String>,
     pub public_keys: Vec<String>,
     pub threshold: u8,
-    pub enclave_id: String,
     pub rpc_url: String,
 }
 
