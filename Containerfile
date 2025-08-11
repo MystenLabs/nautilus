@@ -4,33 +4,30 @@
 # This containerfile uses StageX (https://stagex.tools) images, which provide a
 # full source bootstrapped, deterministic, and hermetic build toolchain
 
-FROM stagex/core-binutils@sha256:83c66e9d7393d7004442f8c1f2ad0f69979cc2a9193222338f4736abf17b6752 AS core-binutils
-FROM stagex/core-ca-certificates@sha256:d6fca6c0080e8e5360cd85fc1c4bd3eab71ce626f40602e38488bfd61fd3e89d AS core-ca-certificates
-FROM stagex/core-gcc@sha256:125bd6306e7f37e57d377d5a189c0e499388aff42b22cc79acee6097357c617f AS core-gcc
-FROM stagex/core-git@sha256:5b0ce8741532026bb7e6f2302855a93057a27a7f38e596e9a7fb0e782f04d0f6 AS core-git
-FROM stagex/core-zlib@sha256:b35b643642153b1620093cfe2963f5fa8e4d194fb2344a5786da5717018976c2 AS core-zlib
-FROM stagex/core-llvm@sha256:bc1c6d67aa73a96dd92f5def7e2701de78b0639d0c815d69110fbb9b3b3e85fe AS core-llvm
-FROM stagex/core-openssl@sha256:8670a22fb76965f31bda1b61cd75ae39a96e1008deffe289a5d94ee4337b1cb2 AS core-openssl
-FROM stagex/core-rust@sha256:9be04ac253dabe11367336d29a1582a25535876a1b68fb9508ac85e898d812fd AS core-rust
-FROM stagex/core-musl@sha256:d5f86324920cfc7fc34f0163502784b73161543ba0a312030a3ddff3ef8ab2f8 AS core-musl
-FROM stagex/core-libunwind@sha256:4f3ead61255c1e58e7dc43a33043f297f8730ec88e068a4460e5fff09e503781 AS core-libunwind
-FROM stagex/core-pkgconf@sha256:fb69c51519edd6aa8e889877b48d2b6874bc5756f72d412908dc629842c46b4a AS core-pkgconf
-FROM stagex/core-busybox@sha256:cac5d773db1c69b832d022c469ccf5f52daf223b91166e6866d42d6983a3b374 AS core-busybox
-FROM stagex/core-python:local@sha256:17d634028c3ed31707aa492dc65dc15ac27bab197d08e447786b3b1e8c26df2c AS core-python
-FROM stagex/core-libzstd@sha256:35ae8f0433cf1472f8fb25e74dc631723e9f458ca3e9544976beb724690adea8 AS core-libzstd
-FROM stagex/user-eif_build@sha256:c1d030fcaa20d26cd144ce992ba4b77665a0e9683f01a92960f9823d39401e41 AS user-eif_build
-FROM stagex/user-gen_initramfs@sha256:6c398be1eea26dcee005d11b5c063e1f7cf079710175e5d550d859c685d81825 AS user-gen_initramfs
-FROM stagex/linux-nitro@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS user-linux-nitro
-FROM stagex/user-cpio@sha256:2695e1b42f93ec3ea0545e270f0fda4adca3cb48d0526da01954efae1bce95c4 AS user-cpio
-FROM stagex/user-socat:local@sha256:acef3dacc5b805d0eaaae0c2d13f567bf168620aea98c8d3e60ea5fd4e8c3108 AS user-socat
-FROM stagex/user-jq@sha256:ced6213c21b570dde1077ef49966b64cbf83890859eff83f33c82620520b563e AS user-jq
+FROM stagex/core-binutils@sha256:f989b48a168f38563b74718b0568118f6a4107916b22bd2457c974ca5bf4c7f4 AS core-binutils
+FROM stagex/core-ca-certificates@sha256:92400d9ed9ee1cf3c7568b3bdaa6c2c1aac3cabff4060dab99d1a8359e782e5a AS core-ca-certificates
+FROM stagex/core-gcc@sha256:ea69941739b0aa5bfb6b1dff8bb4bd7f5117f9cc26e3d9d1f830f35b2fc04c5c AS core-gcc
+FROM stagex/core-git@sha256:7ab36d6183162f0397eba3d5603beceb455982a1f2c122740484af0eb2497444 AS core-git
+FROM stagex/core-zlib@sha256:a143ed84d0aef7012d556df95904017e442c221117a07e5affc395440a2dae88 AS core-zlib
+FROM stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS core-libffi
+FROM stagex/core-llvm@sha256:c74f00501fa8dcb2bd319f493fcac3364d7ccbc29051516d653d019eac116151 AS core-llvm
+FROM stagex/core-openssl@sha256:65bf9dc8676437ebc279f516c8d696936d620f3f53c81c2a35bd05e1360c6d99 AS core-openssl
+FROM stagex/core-rust@sha256:16024267454141decbe82569731aa6e2a9be64411659e828c0988243ababf914 AS core-rust
+FROM stagex/core-musl@sha256:79400dfed7fd30ff939bbd5b1fb2cb114910865891d1bd75e2067a394c3fb4f1 AS core-musl
+FROM stagex/core-libunwind@sha256:cd88506914270f72ec82398390cb8e4c9cfb8173afbc4ad570bf319ee870400b AS core-libunwind
+FROM stagex/core-pkgconf@sha256:608b378949cedc86df6350e5ec428b0e114bb7bc46bc33330b51215cc8ac4a68 AS core-pkgconf
+FROM stagex/core-busybox@sha256:17e496211470fbd77057692619295e32c841e90312e48bce56a171fdb041b0c9 AS core-busybox
+FROM stagex/core-python@sha256:2940224bdacbf51b70354b5cd5f4785a26a788ac38a4bfa40f70eb226a08d9e4 AS core-python
+FROM stagex/core-libzstd@sha256:88bf5f342f57677b719f9916ca7829fbac44234e4696c2628b93ca69344fe21a AS core-libzstd
+FROM stagex/user-eif_build@sha256:0eabf3d09ccf0421bc09fe9e90b656ecc1140155d5358f35de63e2cfd814f4f9 AS user-eif_build
+FROM stagex/user-gen_initramfs@sha256:aff0791ee9ccdeed1304b5bb4edb7fc5b7f485e11bccf5e61668001243ada815 AS user-gen_initramfs
+FROM stagex/user-linux-nitro@sha256:655924404a008c6c70c3411e7b32d6558ac388bcc3a5a02431029e63c93d1985 AS user-linux-nitro
+FROM stagex/user-cpio@sha256:05701450a186fa1cb5a8287f7fa4d216e610a15d22c2e3e86d70ac3550d9cd3c AS user-cpio
+FROM stagex/user-socat@sha256:e2afa58a4291db21191ad3e42318494f7956228715e9b8490c681933d8812df7 AS user-socat
+FROM stagex/user-jq@sha256:e6412c6817c7830b18e0a05389eff7f9c648f4e200238c0b8f61067a2dab36fd AS user-jq
+FROM stagex/user-nit:local AS user-nit
 
-FROM scratch as base
-ENV TARGET=x86_64-unknown-linux-musl
-ENV RUSTFLAGS="-C target-feature=+crt-static"
-ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
-ENV OPENSSL_STATIC=true
-
+FROM scratch AS base
 COPY --from=core-busybox . /
 COPY --from=core-musl . /
 COPY --from=core-libunwind . /
@@ -45,25 +42,26 @@ COPY --from=core-rust . /
 COPY --from=user-gen_initramfs . /
 COPY --from=user-eif_build . /
 COPY --from=core-llvm . /
+COPY --from=core-libffi . /
 COPY --from=core-gcc . /
 COPY --from=user-cpio . /
 COPY --from=user-linux-nitro /bzImage .
-COPY --from=user-linux-nitro /nsm.ko .
 COPY --from=user-linux-nitro /linux.config .
 
-FROM base as build
+FROM base AS build
 COPY . .
 
-RUN cargo build --workspace --locked --no-default-features --release --target x86_64-unknown-linux-musl
-
 WORKDIR /src/nautilus-server
+ENV OPENSSL_STATIC=true
+ENV TARGET=x86_64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-RUN cargo build --locked --no-default-features --release --target x86_64-unknown-linux-musl
+RUN cargo build --locked --no-default-features --release --target "$TARGET"
 
 WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
 RUN mkdir initramfs/
-COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
+# Built-in as of latest linux-nitro
+# COPY --from=user-linux-nitro /nsm.ko initramfs/nsm.ko
 COPY --from=core-busybox . initramfs
 COPY --from=core-python . initramfs
 COPY --from=core-musl . initramfs
@@ -71,17 +69,21 @@ COPY --from=core-ca-certificates /etc/ssl/certs initramfs
 COPY --from=core-busybox /bin/sh initramfs/sh
 COPY --from=user-jq /bin/jq initramfs
 COPY --from=user-socat /bin/socat . initramfs
-RUN cp /target/${TARGET}/release/init initramfs
+COPY --from=user-nit /bin/init initramfs
 RUN cp /src/nautilus-server/target/${TARGET}/release/nautilus-server initramfs
 RUN cp /src/nautilus-server/traffic_forwarder.py initramfs/
 RUN cp /src/nautilus-server/run.sh initramfs/
 RUN cp /src/nautilus-server/allowed_endpoints.yaml initramfs/
 
+COPY <<-EOF initramfs/etc/environment
+SSL_CERT_FILE=/ca-certificates.crt
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/
+EOF
+
 RUN <<-EOF
     set -eux
     cd initramfs
-    find . -exec touch -hcd "@0" "{}" +
-    find . -print0 \
+    find . -exec touch -hcd "@0" "{}" + -print0 \
     | sort -z \
     | cpio \
         --null \
@@ -100,14 +102,13 @@ RUN eif_build \
 	--ramdisk /build_cpio/rootfs.cpio \
 	--pcrs_output /nitro.pcrs \
 	--output /nitro.eif \
-	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
+	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd nit.target=/run.sh'
 
-FROM base as install
+FROM base AS install
 WORKDIR /rootfs
 COPY --from=build /nitro.eif .
 COPY --from=build /nitro.pcrs .
 COPY --from=build /build_cpio/rootfs.cpio .
 
-FROM scratch as package
+FROM scratch AS package
 COPY --from=install /rootfs .
-

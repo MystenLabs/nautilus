@@ -1,17 +1,12 @@
 REGISTRY := local
 .DEFAULT_GOAL :=
 .PHONY: default
-default: out/enclaveos.tar
+default: out/nitro.eif
 
 out:
 	mkdir out
 
-out/enclaveos.tar: out \
-	$(shell git ls-files \
-		src/init \
-		src/aws \
-        src/hello \
-	)
+out/nitro.eif: out $(shell git ls-files src)
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
