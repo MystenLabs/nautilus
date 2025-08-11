@@ -35,11 +35,12 @@ use sui_types::crypto::Signature;
 use sui_types::signature::GenericSignature;
 use tracing::info;
 use sui_types::TypeTag;
-
+use fastcrypto::ed25519::Ed25519Signature;
+use fastcrypto::traits::ToFromBytes;
 /// Init parameter load endpoint - Step 1 of Seal key retrieval
 /// This endpoint is called by the host to get the request body for fetching keys
 pub async fn init_parameter_load(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Json(request): Json<InitParameterLoadRequest>,
 ) -> Result<Json<InitParameterLoadResponse>, EnclaveError> {
     // Generate a unique session ID
@@ -94,7 +95,7 @@ pub async fn init_parameter_load(
     let enclave_object_id = ObjectID::from_hex_literal(&request.enclave_object_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
-    let ptb = create_ptb(&SEAL_CONFIG.rpc_url, package_id, enclave_object_id).await
+    let ptb = create_ptb(&SEAL_CONFIG.rpc_url, package_id, enclave_object_id, &state.eph_kp).await
         .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
     let request_signature = session.sign(&request_message);
@@ -176,9 +177,11 @@ pub async fn complete_parameter_load(
     }))
 }
 
-async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: ObjectID) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
+async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: ObjectID, eph_kp: &Ed25519KeyPair) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     let mut builder = ProgrammableTransactionBuilder::new();
 
+    println!("package_id: {:?}", package_id);
+    println!("enclave_object_id: {:?}", enclave_object_id);
     // id arg, can be anything
     let id_arg = builder.pure("weather_api_key".as_bytes()).unwrap();
 
@@ -186,15 +189,16 @@ async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: Obje
     let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
     let object_response = sui_client.read_api().get_object_with_options(enclave_object_id, sui_sdk::rpc_types::SuiObjectDataOptions::new().with_owner()).await?;
     let object_ref = object_response.data.ok_or("Object not found")?.object_ref();
+    println!("object_ref: {:?}", object_ref);
     let enclave_arg = builder.obj(ObjectArg::ImmOrOwnedObject(object_ref)).unwrap();
 
     // signature arg, commits to seal wallet address
     let wallet_guard = SEAL_WALLET.read().await;
     let public_key = wallet_guard.public();
     let wallet_address: SuiAddress = (&public_key).into();
-    let msg_with_intent = IntentMessage::new(Intent::personal_message(), bcs::to_bytes(&wallet_address).unwrap());
-    let signature = Signature::new_secure(&msg_with_intent, &*wallet_guard);
-    let signature_arg = builder.pure(signature).unwrap();
+    let signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
+    let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
+    let signature_arg = builder.pure(sig.as_bytes()).unwrap();
 
     // Create the type parameter
     let type_arg = TypeTag::from_str(&format!(
