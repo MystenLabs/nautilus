@@ -125,7 +125,7 @@ pub async fn ping() -> Json<PingResponse> {
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/ping", get(ping))
-        .route("/seal/init_parameter_load", get(init_parameter_load))
+        .route("/seal/init_parameter_load", post(init_parameter_load))
         .route(
             "/seal/complete_parameter_load",
             post(complete_parameter_load),

@@ -1,6 +1,6 @@
 # Seal configuration for nautilus enclave
 
-package_id: "0xba06ef0fd022b4831e49de32d032b185cf7ea0b9ac1ea168f9ba952f37775936"
+package_id: "0xa04cc3537fea390f65975c9dffe14a943080bf7400534ba2dd7d37e1cd10ab0e"
 
 key_servers:
   - "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75"

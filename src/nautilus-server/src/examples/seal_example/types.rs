@@ -5,13 +5,6 @@ use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiParsedData;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::SequenceNumber;
-use sui_types::digests::ObjectDigest;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::ObjectArg;
-use sui_types::transaction::ProgrammableTransaction;
-use sui_types::Identifier;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SealConfig {
     pub package_id: String,
@@ -32,6 +25,11 @@ pub struct KeyServerInfo {
     pub object_id: String,
     pub name: String,
     pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InitParameterLoadRequest {
+    pub enclave_object_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -143,27 +141,4 @@ pub async fn fetch_key_server_urls(
     }
 
     Ok(servers)
-}
-
-pub fn create_ptb(package_id: ObjectID, _enclave_id: ObjectID) -> ProgrammableTransaction {
-    let mut builder = ProgrammableTransactionBuilder::new();
-    // the prefix of id should be the object id
-    let ids = builder.pure(vec![0u8; 32]).unwrap();
-    let list = builder
-        .obj(ObjectArg::ImmOrOwnedObject((
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        )))
-        .unwrap();
-
-    builder.programmable_move_call(
-        package_id,
-        Identifier::new("seal_policy").unwrap(),
-        Identifier::new("seal_approve").unwrap(),
-        vec![],
-        vec![ids, list],
-    );
-
-    builder.finish()
 }

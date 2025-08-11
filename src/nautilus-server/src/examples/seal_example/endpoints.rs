@@ -8,6 +8,11 @@ use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
+use std::str::FromStr;
+use sui_sdk::SuiClientBuilder;
+use sui_types::Identifier;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{ObjectArg, ProgrammableTransaction};
 use fastcrypto::encoding::Hex;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::serde_helpers::ToFromByteArray;
@@ -29,11 +34,13 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::Signature;
 use sui_types::signature::GenericSignature;
 use tracing::info;
+use sui_types::TypeTag;
 
 /// Init parameter load endpoint - Step 1 of Seal key retrieval
 /// This endpoint is called by the host to get the request body for fetching keys
 pub async fn init_parameter_load(
     State(_state): State<Arc<AppState>>,
+    Json(request): Json<InitParameterLoadRequest>,
 ) -> Result<Json<InitParameterLoadResponse>, EnclaveError> {
     // Generate a unique session ID
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -49,11 +56,6 @@ pub async fn init_parameter_load(
     // Parse package ID from config
     let package_id = ObjectID::from_hex_literal(&config.package_id)
         .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
-
-    // Parse enclave object ID from config
-    let enclave_id = ObjectID::from_hex_literal(&config.enclave_id).map_err(|e| {
-        EnclaveError::GenericError(format!("Invalid enclave object ID in config: {}", e))
-    })?;
 
     let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
 
@@ -89,7 +91,11 @@ pub async fn init_parameter_load(
         mvr_name: None,
     };
 
-    let ptb = create_ptb(package_id, enclave_id);
+    let enclave_object_id = ObjectID::from_hex_literal(&request.enclave_object_id).map_err(|e| {
+        EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
+    })?;
+    let ptb = create_ptb(&SEAL_CONFIG.rpc_url, package_id, enclave_object_id).await
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
     let request_signature = session.sign(&request_message);
 
@@ -168,4 +174,41 @@ pub async fn complete_parameter_load(
     Ok(Json(CompleteParameterLoadResponse {
         response: Hex::encode(&secret),
     }))
+}
+
+async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: ObjectID) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    // id arg, can be anything
+    let id_arg = builder.pure("weather_api_key".as_bytes()).unwrap();
+
+    // enclave arg
+    let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
+    let object_response = sui_client.read_api().get_object_with_options(enclave_object_id, sui_sdk::rpc_types::SuiObjectDataOptions::new().with_owner()).await?;
+    let object_ref = object_response.data.ok_or("Object not found")?.object_ref();
+    let enclave_arg = builder.obj(ObjectArg::ImmOrOwnedObject(object_ref)).unwrap();
+
+    // signature arg, commits to seal wallet address
+    let wallet_guard = SEAL_WALLET.read().await;
+    let public_key = wallet_guard.public();
+    let wallet_address: SuiAddress = (&public_key).into();
+    let msg_with_intent = IntentMessage::new(Intent::personal_message(), bcs::to_bytes(&wallet_address).unwrap());
+    let signature = Signature::new_secure(&msg_with_intent, &*wallet_guard);
+    let signature_arg = builder.pure(signature).unwrap();
+
+    // Create the type parameter
+    let type_arg = TypeTag::from_str(&format!(
+        "{}::weather::WEATHER",
+        package_id
+    ))?;
+
+    builder.programmable_move_call(
+        package_id,
+        Identifier::new("seal_policy").unwrap(),
+        Identifier::new("seal_approve").unwrap(),
+        vec![type_arg],
+        vec![id_arg, enclave_arg, signature_arg],
+    );
+
+    Ok(builder.finish())
 }
