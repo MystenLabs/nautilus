@@ -37,20 +37,20 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
 
 ```shell
 /move
-  /enclave          Use without modification. Utility functions to create an enclave config and register public key by providing a valid attestation document.
-  /weather          Application logic, uses functions in enclave directory. Replace this with your Nautilus application onchain logic.
-  /twitter          Another example. 
+  /enclave          Shared code. Utility functions to create an enclave config and register public key by providing a valid attestation document.
+  /weather-example  Application logic, uses functions in enclave directory. Start your Nautilus application onchain logic from this example
+  /twitter-example  Another example. 
 /src
   /aws              Use without modification. AWS boilerplate.
   /init             Use without modification. AWS boilerplate.
   /system           Use without modification. AWS boilerplate.
   /nautilus-server  Nautilus server that runs inside the enclave.
     /src
-      /examples
-        /weather  Example. Add another directory and replace it with your own app. 
+      /apps
+        /weather-example  Example. Add another directory and replace it with your own app. 
           mod.rs  The process_data endpoints and its artifacts for fetching weather. Replace this with your offchain computation logic for process_data.
           allowed_endpoints.yaml  This file lists all endpoints the enclave is allowed to access. By default, the enclave has no internet access unless the parent EC2 instance explicitly forwards traffic. During the configuration step, this file is used to generate the necessary code to enable limited traffic forwarding from the enclave. 
-        /twitter  Another example. 
+        /twitter-example  Another example. 
           mod.rs
           allowed_endpoints.yaml
     run.sh          Use without modification. Configures all necessary domains and traffic forwarder, then runs the Rust server inside the enclave.
@@ -76,7 +76,7 @@ export AWS_ACCESS_KEY_ID=<your-access-key>
 export AWS_SECRET_ACCESS_KEY=<your-secret-key>
 export AWS_SESSION_TOKEN=<your-session-token>
 
-sh configure_enclave.sh <EXAMPLE> # e.g. weather, twitter, defaults to weather
+sh configure_enclave.sh <APP> # e.g. `sh configure_enclave.sh weather-example`
 ```
 
 > [!NOTE]
@@ -114,7 +114,7 @@ For the Twitter example, this secret value can be the API Bearer token for your 
 
 ```shell
 cd nautilus/
-make EXAMPLE=<EXAMPLE> && make run # this builds the enclave and run it
+make ENCLAVE_APP=<APP> && make run # this builds the enclave and run it, e.g. make ENCLAVE_APP=weather-example
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
@@ -135,7 +135,7 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ## Develop your own Nautilus server
 
-The Nautilus server logic is located in `src/nautilus-server`. To customize the application, refer to `/weather` or `/twitter` for example:
+The Nautilus server logic is located in `src/nautilus-server`. To customize the application, refer to `apps/weather-example` or `apps/twitter-example` for example:
 
 - Create `allowed_endpoints.yaml` for any required domains required by your application.
 - Create `mod.rs` to update the `process_data` endpoint and add new endpoints as needed.
@@ -151,7 +151,7 @@ To test the `process_data` endpoint locally, run the following:
 
 ```shell
 cd src/nautilus-server/
-cargo build --no-default-features --features <EXAMPLE>
+cargo build --no-default-features --features <APP>
 RUST_LOG=debug API_KEY=045a27812dbe456392913223221306 cargo run
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://localhost:3000/process_data
@@ -188,7 +188,7 @@ Note that this includes any traffic forwarding changes made in `run.sh` (see bra
 
 ```shell
 cd nautilus/
-make EXAMPLE=weather
+make ENCLAVE_APP=weather-example
 
 cat out/nitro.pcrs
 6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c PCR0
@@ -224,11 +224,11 @@ cd ../app
 sui move build
 sui client publish
 
-# record CAP_OBJECT_ID (owned object of type Cap), ENCLAVE_CONFIG_OBJECT_ID (shared object), EXAMPLES_PACKAGE_ID (package containing weather module) as env var from publish output
+# record CAP_OBJECT_ID (owned object of type Cap), ENCLAVE_CONFIG_OBJECT_ID (shared object), APP_PACKAGE_ID (package containing weather module) as env var from publish output
 
 CAP_OBJECT_ID=0xb157d241cc00b7a9b8b0f11d0b4c3e11d8334be95f7e50240962611bd802abff
 ENCLAVE_CONFIG_OBJECT_ID=0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d
-EXAMPLES_PACKAGE_ID=0x7e712fd9e5e57d87137440cfea77dc7970575a5c3229d78bb7176ab984d94adf
+APP_PACKAGE_ID=0x7e712fd9e5e57d87137440cfea77dc7970575a5c3229d78bb7176ab984d94adf
 
 # record the deployed enclave url, e.g. http://<PUBLIC_IP>:3000
 ENCLAVE_URL=<DEPLOYED_URL>
@@ -238,7 +238,7 @@ MODULE_NAME=weather
 OTW_NAME=WEATHER
 
 # make sure all env vars are populated
-echo $EXAMPLES_PACKAGE_ID
+echo $APP_PACKAGE_ID
 echo $ENCLAVE_PACKAGE_ID
 echo $CAP_OBJECT_ID
 echo $ENCLAVE_CONFIG_OBJECT_ID
@@ -254,13 +254,13 @@ echo $ENCLAVE_URL
 # =======
 
 # this calls the update_pcrs onchain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
-sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$EXAMPLES_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
+sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
 
 # optional, give it a name you like
-sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$EXAMPLES_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
+sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
 
 # this script calls the get_attestation endpoint from your enclave url and use it to calls register_enclave onchain to register the public key, results in the created enclave object
-sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $EXAMPLES_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
+sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # record the created shared object ENCLAVE_OBJECT_ID as env var from register output
 ENCLAVE_OBJECT_ID=0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d
@@ -272,7 +272,7 @@ The Twitter example artifacts can be found below:
 
 ```
 cd nautilus/
-make EXAMPLE=twitter
+make ENCLAVE_APP=twitter-example
 
 cat out/nitro.pcrs
 c2612813895f2696dd4468cc28b8a7d6fb5c2d34d93dcbaeeb953f1f2f395e4f4eded80520b4bc60ea5027c28be4f3a1 PCR0
@@ -288,7 +288,7 @@ MODULE_NAME=twitter
 OTW_NAME=TWITTER
 
 # replace with your registered enclave
-EXAMPLES_PACKAGE_ID=0xc0c1b892b4db559625c0bb540fa15a243a65ccaa5584e379ed0361cf3027297b
+APP_PACKAGE_ID=0xc0c1b892b4db559625c0bb540fa15a243a65ccaa5584e379ed0361cf3027297b
 ENCLAVE_PACKAGE_ID=0xddd58ea9795270f3cb4fe75b55c3f69e182c270f2dff783ef8c489a8282c35ac
 CAP_OBJECT_ID=0xcae6faa354249fc450a3b4c84471cddd37280fd01a17b387a4fda3c2b3b80041
 ENCLAVE_CONFIG_OBJECT_ID=0xe13cbe215b1b63b7aa4a41d5cf3b5ede1ae0cb1c50bb66d42673c51971da8322
@@ -310,7 +310,7 @@ This design allows the admin to run multiple instances of the same enclave with 
 
 ### Update PCRs
 
-The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make EXAMPLE=<EXAMPLE> && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the section above.
+The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make ENCLAVE_APP=<APP> && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the section above.
 
 ## Using the verified computation in Move
 
@@ -327,7 +327,7 @@ Then use the values from the enclave response - signature, timestamp, location, 
 
 ```shell
 sh ../../update_weather.sh \
-    $EXAMPLES_PACKAGE_ID \
+    $APP_PACKAGE_ID \
     $MODULE_NAME \
     $OTW_NAME \
     $ENCLAVE_OBJECT_ID \
