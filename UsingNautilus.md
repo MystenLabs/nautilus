@@ -190,13 +190,13 @@ cd nautilus/
 make ENCLAVE_APP=weather-example
 
 cat out/nitro.pcrs
-6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c PCR0
-6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c PCR1
+911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
+911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
 21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 
 # Add env var that will be used later when registering the enclave.
-PCR0=6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c
-PCR1=6adbbc970be4318b231ee7aa587231682f16bcae62cbda42d9ae71b179981fef90f08ed88485cce0828be2fd066ed54c
+PCR0=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
+PCR1=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 ```
 
@@ -216,7 +216,7 @@ sui move build
 sui client publish
 
 # record ENCLAVE_PACKAGE_ID as env var from publish output
-ENCLAVE_PACKAGE_ID=0x14e8b4d8b28ee9aa5ea604f3f33969b3d0f03247b51837f27e17bcf875d3582c
+ENCLAVE_PACKAGE_ID=0x3b009f952e11f0fa0612d0a8e07461fb69edc355d732e5d6e39267b1b4fd7138
 
 # deploy your dapp logic
 cd ../<APP>
@@ -225,9 +225,9 @@ sui client publish
 
 # record CAP_OBJECT_ID (owned object of type Cap), ENCLAVE_CONFIG_OBJECT_ID (shared object), APP_PACKAGE_ID (package containing weather module) as env var from publish output
 
-CAP_OBJECT_ID=0xb157d241cc00b7a9b8b0f11d0b4c3e11d8334be95f7e50240962611bd802abff
-ENCLAVE_CONFIG_OBJECT_ID=0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d
-APP_PACKAGE_ID=0x7e712fd9e5e57d87137440cfea77dc7970575a5c3229d78bb7176ab984d94adf
+CAP_OBJECT_ID=0xb232d20245ba2d624d1c1628c4fc062bd1d3249601385476d9736fc60c897d2b
+ENCLAVE_CONFIG_OBJECT_ID=0x9a50017ab37090ef4b5704eb24201c88b2e4bbad2aad1d4e69ecf1bdfbae9ccb
+APP_PACKAGE_ID=0x097b551dec72f0c47e32e5f8114d0d12a98ab31762d21adff295f6d95d353154
 
 # record the deployed enclave url, e.g. http://<PUBLIC_IP>:3000
 ENCLAVE_URL=<DEPLOYED_URL>
@@ -262,10 +262,10 @@ sui client call --function update_name --module enclave --package $ENCLAVE_PACKA
 sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # record the created shared object ENCLAVE_OBJECT_ID as env var from register output
-ENCLAVE_OBJECT_ID=0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d
+ENCLAVE_OBJECT_ID=0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a
 ```
 
-You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d).
+You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0x9a50017ab37090ef4b5704eb24201c88b2e4bbad2aad1d4e69ecf1bdfbae9ccb). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a).
 
 The Twitter example artifacts can be found below: 
 
