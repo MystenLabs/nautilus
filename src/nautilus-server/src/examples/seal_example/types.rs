@@ -29,6 +29,7 @@ pub struct KeyServerInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitParameterLoadRequest {
     pub enclave_object_id: String,
+    pub initial_shared_version: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

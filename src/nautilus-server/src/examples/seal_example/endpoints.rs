@@ -7,10 +7,8 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
-use sui_types::object::Owner;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use std::str::FromStr;
-use sui_sdk::SuiClientBuilder;
 use sui_types::Identifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, ProgrammableTransaction};
@@ -96,7 +94,7 @@ pub async fn init_parameter_load(
     let enclave_object_id = ObjectID::from_hex_literal(&request.enclave_object_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
-    let ptb = create_ptb(&SEAL_CONFIG.rpc_url, package_id, enclave_object_id, &state.eph_kp).await
+    let ptb = create_ptb(package_id, enclave_object_id, request.initial_shared_version, &state.eph_kp).await
         .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
     let request_signature = session.sign(&request_message);
@@ -178,7 +176,7 @@ pub async fn complete_parameter_load(
     }))
 }
 
-async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: ObjectID, eph_kp: &Ed25519KeyPair) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
+async fn create_ptb(package_id: ObjectID, enclave_object_id: ObjectID, initial_shared_version: u64, eph_kp: &Ed25519KeyPair) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     let mut builder = ProgrammableTransactionBuilder::new();
 
     println!("package_id: {:?}", package_id);
@@ -187,31 +185,6 @@ async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: Obje
     let id_arg = builder.pure("weather_api_key".as_bytes().to_vec()).unwrap();
 
     // enclave arg - Enclave is a shared object
-    let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
-    let object_response = sui_client.read_api().get_object_with_options(
-        enclave_object_id, 
-        sui_sdk::rpc_types::SuiObjectDataOptions::new()
-            .with_owner()
-            .with_previous_transaction()
-    ).await?;
-    let object_data = object_response.data.ok_or("Object not found")?;
-    
-    // Get the initial shared version for the shared object
-    let initial_shared_version = if let Some(owner) = &object_data.owner {
-        match owner {
-            Owner::Shared { initial_shared_version } => {
-                initial_shared_version.value()
-            }
-            _ => {
-                return Err(format!("Object {} is not a shared object, owner: {:?}", enclave_object_id, owner).into());
-            }
-        }
-    } else {
-        return Err(format!("Could not determine owner for object {}", enclave_object_id).into());
-    };
-    
-    println!("object_ref: {:?}", object_data.object_ref());
-    println!("initial_shared_version: {}", initial_shared_version);
     let enclave_arg = builder.obj(ObjectArg::SharedObject {
         id: enclave_object_id,
         initial_shared_version: initial_shared_version.into(),
