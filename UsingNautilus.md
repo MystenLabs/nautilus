@@ -219,7 +219,7 @@ sui client publish
 ENCLAVE_PACKAGE_ID=0x14e8b4d8b28ee9aa5ea604f3f33969b3d0f03247b51837f27e17bcf875d3582c
 
 # deploy your dapp logic
-cd ../app
+cd ../<APP>
 sui move build
 sui client publish
 
