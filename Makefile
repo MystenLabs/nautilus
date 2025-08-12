@@ -1,4 +1,5 @@
 REGISTRY := local
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: out/enclaveos.tar
@@ -12,12 +13,16 @@ out/enclaveos.tar: out \
 		src/aws \
         src/hello \
 	)
+ifndef ENCLAVE_APP
+	$(error ENCLAVE_APP is not set. Please provide ENCLAVE_APP variable, e.g., make ENCLAVE_APP=weather-example)
+endif
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
 		--platform linux/amd64 \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
+		--build-arg ENCLAVE_APP=$(ENCLAVE_APP) \
 		.
 
 .PHONY: run

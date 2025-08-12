@@ -37,7 +37,7 @@ pub struct IntentMessage<T: Serialize> {
 #[derive(Serialize_repr, Deserialize_repr, Debug)]
 #[repr(u8)]
 pub enum IntentScope {
-    Weather = 0,
+    ProcessData = 0,
 }
 
 impl<T: Serialize + Debug> IntentMessage<T> {
