@@ -24,7 +24,7 @@ show_help() {
     echo "  # optional: export REGION=<your-region>  (defaults to us-east-1)"
     echo "  # optional: export AMI_ID=<your-ami-id>  (defaults to ami-085ad6ae776d8f09c)"
     echo "  # optional: export API_ENV_VAR_NAME=<env-var-name> (defaults to 'API_KEY')"
-    echo "  ./configure_enclave.sh"
+    echo "  ./configure_enclave.sh <APP>"
     echo ""
     echo "Options:"
     echo "  -h, --help    Show this help message"
@@ -34,6 +34,17 @@ show_help() {
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     show_help
     exit 0
+fi
+
+# Check for required APP argument
+if [ -z "$1" ]; then
+    echo "Error: APP argument is required."
+    echo "Usage: ./configure_enclave.sh <APP>"
+    echo "Example: ./configure_enclave.sh twitter-example"
+    echo "Example: ./configure_enclave.sh weather-example"
+    echo ""
+    echo "For more information, run: ./configure_enclave.sh --help"
+    exit 1
 fi
 
 ############################
