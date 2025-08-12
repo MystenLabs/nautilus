@@ -7,6 +7,7 @@ use axum::response::Response;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
+use std::fmt;
 
 mod apps {
     #[cfg(feature = "twitter-example")]
@@ -16,6 +17,10 @@ mod apps {
     #[cfg(feature = "weather-example")]
     #[path = "weather-example/mod.rs"]
     pub mod weather_example;
+
+    #[cfg(feature = "seal-example")]
+    #[path = "seal-example/mod.rs"]
+    pub mod seal_example;
 }
 
 pub mod app {
@@ -24,6 +29,9 @@ pub mod app {
 
     #[cfg(feature = "weather-example")]
     pub use crate::apps::weather_example::*;
+
+    #[cfg(feature = "seal-example")]
+    pub use crate::apps::seal_example::*;
 }
 
 pub mod common;
@@ -54,3 +62,13 @@ impl IntoResponse for EnclaveError {
 pub enum EnclaveError {
     GenericError(String),
 }
+
+impl fmt::Display for EnclaveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EnclaveError::GenericError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl std::error::Error for EnclaveError {}
