@@ -22,7 +22,7 @@ endif
 		--platform linux/amd64 \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
-		--build-arg ENCLAVE_APP=$(APP) \
+		--build-arg ENCLAVE_APP=$(ENCLAVE_APP) \
 		.
 
 .PHONY: run
