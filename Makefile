@@ -13,6 +13,9 @@ out/enclaveos.tar: out \
 		src/aws \
         src/hello \
 	)
+ifndef ENCLAVE_APP
+	$(error ENCLAVE_APP is not set. Please provide ENCLAVE_APP variable, e.g., make ENCLAVE_APP=weather-example)
+endif
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
