@@ -267,7 +267,7 @@ ENCLAVE_OBJECT_ID=0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359
 
 You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0x9a50017ab37090ef4b5704eb24201c88b2e4bbad2aad1d4e69ecf1bdfbae9ccb). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a).
 
-The Twitter example artifacts can be found below: 
+### Twitter example artifacts
 
 ```
 cd nautilus/
@@ -299,7 +299,7 @@ ENCLAVE_URL=http://<PUBLIC_IP>:3000
 
 You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d).
 
-The Twitter example frontend code can be found [here](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
+The Twitter example frontend code can be found [here](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend). 
 
 ### Enclave management
 
