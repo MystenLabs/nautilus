@@ -13,7 +13,8 @@ use nautilus_server::app::types::{fetch_key_server_urls, SealConfig};
 use seal_crypto::ibe::PublicKey as IBEPublicKey;
 use seal_crypto::{seal_encrypt, EncryptionInput, IBEPublicKeys};
 use seal_key_server::types::{FetchKeyRequest, FetchKeyResponse};
-use sui_types::base_types::ObjectID;
+use sui_sdk_types::ObjectId as ObjectID;
+use std::str::FromStr;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitRequest {
     pub session_id: String,
@@ -72,14 +73,14 @@ async fn handle_encrypt(
         return Err(format!("Config file not found: {}", config_path).into());
     };
 
-    let package_id = ObjectID::from_hex_literal(&config.package_id)
+    let package_id = ObjectID::from_str(&config.package_id)
         .map_err(|e| format!("Invalid package ID: {}", e))?;
 
     let key_servers: Vec<[u8; 32]> = config
         .key_servers
         .iter()
         .map(|s| {
-            ObjectID::from_hex_literal(s.trim())
+            ObjectID::from_str(s.trim())
                 .map(|id| id.into_bytes())
                 .map_err(|e| format!("Invalid key server ID: {}", e))
         })

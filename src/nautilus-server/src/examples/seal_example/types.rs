@@ -3,8 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiParsedData;
-use sui_sdk::SuiClientBuilder;
-use sui_types::base_types::ObjectID;
+use sui_sdk_types::ObjectId as ObjectID;
+use sui_rpc::Client as SuiClient;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SealConfig {
     pub package_id: String,
@@ -47,13 +48,12 @@ pub struct CompleteParameterLoadResponse {
     pub response: String,
 }
 
-/// Fetch key server URLs from Sui chain using proper SDK
+/// Fetch key server URLs from Sui chain using sui-rpc
 pub async fn fetch_key_server_urls(
     key_server_ids: &[String],
     sui_rpc: &str,
 ) -> Result<Vec<KeyServerInfo>, Box<dyn std::error::Error>> {
-    let sui_client = SuiClientBuilder::default().build(sui_rpc).await?;
-
+    let sui_client = SuiClient::new(sui_rpc).map_err(|e| format!("Failed to create RPC client: {}", e))?;
     let mut servers = Vec::new();
 
     for object_id_str in key_server_ids {
@@ -62,59 +62,58 @@ pub async fn fetch_key_server_urls(
             .map_err(|e| format!("Invalid object ID {}: {}", object_id_str, e))?;
 
         // Get the dynamic field object for version 1
-        let dynamic_field_name = sui_types::dynamic_field::DynamicFieldName {
-            type_: sui_types::TypeTag::U64,
+        let dynamic_field_name = sui_json_rpc_types::DynamicFieldName {
+            type_: sui_sdk_types::TypeTag::U64,
             value: serde_json::Value::String("1".to_string()),
         };
 
-        match sui_client
-            .read_api()
-            .get_dynamic_field_object(object_id, dynamic_field_name)
-            .await
-        {
+        let params = serde_json::json!([
+            object_id.to_string(),
+            dynamic_field_name
+        ]);
+        
+        match sui_client.request("suix_getDynamicFieldObject", params).await {
             Ok(response) => {
-                if let Some(object_data) = response.data {
-                    if let Some(content) = object_data.content {
-                        if let SuiParsedData::MoveObject(parsed_data) = content {
-                            let fields = &parsed_data.fields;
+                if let Some(object_data) = response.get("data") {
+                    if let Some(content) = object_data.get("content") {
+                        // Check if it's a MoveObject by checking dataType field
+                        if content.get("dataType").and_then(|v| v.as_str()) == Some("moveObject") {
+                            let fields = content.get("fields");
 
-                            // Convert fields to JSON value for access
-                            let fields_json = serde_json::to_value(fields)
-                                .map_err(|e| format!("Failed to serialize fields: {}", e))?;
+                            if let Some(fields) = fields {
+                                // Convert fields to JSON value for access
+                                let fields_json = fields;
 
-                            // Extract URL and name from the nested 'value' field
-                            let value_struct = fields_json.get("value").ok_or_else(|| {
-                                format!("Missing 'value' field for object {}", object_id_str)
-                            })?;
+                                // Extract URL and name from the nested 'value' field
+                                let value_struct = fields_json.get("value").ok_or_else(|| {
+                                    format!("Missing 'value' field for object {}", object_id_str)
+                                })?;
 
-                            // The value is a Struct, we need to access its fields
-                            let value_fields = value_struct.get("fields").ok_or_else(|| {
-                                format!(
-                                    "Missing 'fields' in value struct for object {}",
-                                    object_id_str
-                                )
-                            })?;
+                                // The value is a Struct, we need to access its fields
+                                let value_fields = value_struct.get("fields").ok_or_else(|| {
+                                    format!(
+                                        "Missing 'fields' in value struct for object {}",
+                                        object_id_str
+                                    )
+                                })?;
 
-                            let url = value_fields.get("url")
-                                .and_then(|v| match v {
-                                    serde_json::Value::String(s) => Some(s.clone()),
-                                    _ => None,
-                                })
-                                .ok_or_else(|| format!("Missing or invalid 'url' field in value fields for object {}", object_id_str))?;
+                                let url = value_fields.get("url")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .ok_or_else(|| format!("Missing or invalid 'url' field in value fields for object {}", object_id_str))?;
 
-                            let name = value_fields
-                                .get("name")
-                                .and_then(|v| match v {
-                                    serde_json::Value::String(s) => Some(s.clone()),
-                                    _ => Some("Unknown".to_string()),
-                                })
-                                .unwrap_or_else(|| "Unknown".to_string());
+                                let name = value_fields
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| "Unknown".to_string());
 
-                            servers.push(KeyServerInfo {
-                                object_id: object_id_str.clone(),
-                                name,
-                                url,
-                            });
+                                servers.push(KeyServerInfo {
+                                    object_id: object_id_str.clone(),
+                                    name,
+                                    url,
+                                });
+                            }
                         } else {
                             return Err(format!(
                                 "Unexpected content type for object {}",

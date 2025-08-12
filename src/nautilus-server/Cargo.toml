@@ -34,10 +34,11 @@ lazy_static = "1.4"
 hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 clap = { version = "4.0", features = ["derive"] }
-sui-sdk = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
-sui-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
 sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", optional = true }
-shared_crypto = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0", package = "shared-crypto" }
+sui-sdk-types = { version = "0.0.6" }
+sui-crypto = { version = "0.0.6", features = ["ed25519"] }
+sui-transaction-builder = { version = "0.0.6" }
+sui-rpc = { version = "0.0.6" }
 seal-crypto = { git = "https://github.com/MystenLabs/seal", rev = "7ffad8191f37171da6fd1ede4ef3dcb04f5989f9", package = "crypto" }
 seal-key-server = { git = "https://github.com/MystenLabs/seal", rev = "7ffad8191f37171da6fd1ede4ef3dcb04f5989f9", package = "key-server" }
 regex = { version = "1.5", optional = true }
@@ -46,4 +47,4 @@ regex = { version = "1.5", optional = true }
 default = ["weather"]
 weather = []
 twitter = ["regex"]
-seal-example = ["sui-sdk", "sui-types", "sui-json-rpc-types"]
+seal-example = ["sui-json-rpc-types"]

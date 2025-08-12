@@ -13,21 +13,19 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
-use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::traits::KeyPair;
+use sui_crypto::ed25519::Ed25519PrivateKey;
+use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use sui_types::crypto::SuiKeyPair;
 use tokio::sync::RwLock;
 use tracing::info;
 type ElGamalSecretKey = seal_crypto::elgamal::SecretKey<fastcrypto::groups::bls12381::G1Element>;
 
 lazy_static::lazy_static! {
-    pub static ref SEAL_WALLET: Arc<RwLock<sui_types::crypto::SuiKeyPair>> = {
-        let ed25519_kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
-        let sui_kp = SuiKeyPair::Ed25519(ed25519_kp);
-        Arc::new(RwLock::new(sui_kp))
+    pub static ref SEAL_WALLET: Arc<RwLock<Ed25519PrivateKey>> = {
+        let ed25519_kp = Ed25519PrivateKey::generate(rand::thread_rng());
+        Arc::new(RwLock::new(ed25519_kp))
     };
     pub static ref SEAL_CONFIG: SealConfig = {
         let config_str = include_str!("seal_config.yaml");

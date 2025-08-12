@@ -7,13 +7,9 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
-use sui_types::object::Owner;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use std::str::FromStr;
-use sui_sdk::SuiClientBuilder;
-use sui_types::Identifier;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{ObjectArg, ProgrammableTransaction};
+use sui_sdk_types::{Identifier, ObjectId as ObjectID, TypeTag, Address as SuiAddress, ProgrammableTransaction, Command, Argument, ObjectArg, Ed25519PublicKey, Input, IntentScope, IntentVersion, IntentAppId};
 use fastcrypto::encoding::Hex;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::serde_helpers::ToFromByteArray;
@@ -27,17 +23,19 @@ use seal_key_server::types::Certificate;
 use seal_key_server::types::FetchKeyRequest;
 use seal_key_server::types::FetchKeyResponse;
 use seal_key_server::{signed_message, signed_request};
-use shared_crypto::intent::{Intent, IntentMessage};
+use sui_sdk_types::{Intent, Ed25519Signature};
+use crate::common::IntentMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::Signature;
-use sui_types::signature::GenericSignature;
+use sui_crypto::ed25519::Ed25519PrivateKey;
+use sui_sdk_types::{UserSignature, SignatureScheme};
+use sui_crypto::SuiSigner;
+use sui_rpc::Client as SuiClient;
 use tracing::info;
-use sui_types::TypeTag;
 use fastcrypto::ed25519::Ed25519Signature;
 use fastcrypto::traits::ToFromBytes;
+
 /// Init parameter load endpoint - Step 1 of Seal key retrieval
 /// This endpoint is called by the host to get the request body for fetching keys
 pub async fn init_parameter_load(
@@ -52,11 +50,11 @@ pub async fn init_parameter_load(
     let config = &*SEAL_CONFIG;
 
     let wallet_guard = SEAL_WALLET.read().await;
-    let public_key = wallet_guard.public();
-    let wallet_address: SuiAddress = (&public_key).into();
+    let public_key: Ed25519PublicKey = wallet_guard.public_key();
+    let wallet_address = public_key.derive_address();
 
     // Parse package ID from config
-    let package_id = ObjectID::from_hex_literal(&config.package_id)
+    let package_id = ObjectID::from_str(&config.package_id)
         .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
 
     let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
@@ -75,27 +73,34 @@ pub async fn init_parameter_load(
         .as_millis() as u64;
     let ttl_min = 10;
     let message = signed_message(
-        package_id.to_hex_uncompressed(),
+        Hex::encode(package_id.as_bytes()),
         session.public(),
         creation_time,
         ttl_min,
     );
 
     let msg_with_intent = IntentMessage::new(Intent::personal_message(), message.clone());
-    let signature =
-        GenericSignature::Signature(Signature::new_secure(&msg_with_intent, &*wallet_guard));
+    
+    // Sign the message using the wallet's Ed25519 private key
+    let sig_bytes = wallet_guard.sign_personal_message(&msg_with_intent.to_bytes());
+    let user_sig = UserSignature::Ed25519 {
+        signature: sui_sdk_types::Ed25519Signature::from_bytes(&sig_bytes).unwrap(),
+        public_key: public_key.clone(),
+    };
+    
     let certificate = Certificate {
-        user: wallet_address,
+        user: wallet_address.into(),
         session_vk: session.public().clone(),
         creation_time,
         ttl_min,
-        signature,
+        signature: user_sig,
         mvr_name: None,
     };
 
-    let enclave_object_id = ObjectID::from_hex_literal(&request.enclave_object_id).map_err(|e| {
+    let enclave_object_id = ObjectID::from_str(&request.enclave_object_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
+    
     let ptb = create_ptb(&SEAL_CONFIG.rpc_url, package_id, enclave_object_id, &state.eph_kp).await
         .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
@@ -143,7 +148,7 @@ pub async fn complete_parameter_load(
         let user_secret_key =
             elgamal_decrypt(&enc_secret, &response.decryption_keys[0].encrypted_key);
         // todo: verify secret key
-        all_keys.insert(object_id, user_secret_key);
+        all_keys.insert(object_id.into_bytes(), user_secret_key);
     });
 
     let user_secret_keys = IBEUserSecretKeys::BonehFranklinBLS12381(all_keys);
@@ -179,70 +184,92 @@ pub async fn complete_parameter_load(
 }
 
 async fn create_ptb(rpc_url: &str, package_id: ObjectID, enclave_object_id: ObjectID, eph_kp: &Ed25519KeyPair) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
-    let mut builder = ProgrammableTransactionBuilder::new();
-
     println!("package_id: {:?}", package_id);
     println!("enclave_object_id: {:?}", enclave_object_id);
-    // id arg, can be anything
-    let id_arg = builder.pure("weather_api_key".as_bytes().to_vec()).unwrap();
 
-    // enclave arg - Enclave is a shared object
-    let sui_client = SuiClientBuilder::default().build(rpc_url).await?;
-    let object_response = sui_client.read_api().get_object_with_options(
-        enclave_object_id, 
-        sui_sdk::rpc_types::SuiObjectDataOptions::new()
-            .with_owner()
-            .with_previous_transaction()
-    ).await?;
-    let object_data = object_response.data.ok_or("Object not found")?;
+    // Use sui-rpc client to get object info
+    let sui_client = SuiClient::new(rpc_url).map_err(|e| format!("Failed to create RPC client: {}", e))?;
     
-    // Get the initial shared version for the shared object
-    let initial_shared_version = if let Some(owner) = &object_data.owner {
-        match owner {
-            Owner::Shared { initial_shared_version } => {
-                initial_shared_version.value()
+    // Make RPC call to get object with owner info
+    let request_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "sui_getObject",
+        "params": [
+            enclave_object_id.to_string(),
+            {
+                "showOwner": true,
+                "showPreviousTransaction": true
             }
-            _ => {
-                return Err(format!("Object {} is not a shared object, owner: {:?}", enclave_object_id, owner).into());
-            }
-        }
+        ]
+    });
+    
+    let response: serde_json::Value = sui_client.request("sui_getObject", request_body["params"].clone()).await?;
+    
+    let data = response.get("data")
+        .ok_or("No data in result")?;
+    let owner = data.get("owner")
+        .ok_or("No owner in data")?;
+    
+    // Extract initial shared version from owner object
+    let initial_shared_version = if let Some(shared_obj) = owner.get("Shared") {
+        shared_obj.get("initial_shared_version")
+            .and_then(|v| v.as_u64())
+            .ok_or("No initial_shared_version in Shared owner")?
     } else {
-        return Err(format!("Could not determine owner for object {}", enclave_object_id).into());
+        return Err(format!("Object {} is not a shared object", enclave_object_id).into());
     };
     
-    println!("object_ref: {:?}", object_data.object_ref());
     println!("initial_shared_version: {}", initial_shared_version);
-    let enclave_arg = builder.obj(ObjectArg::SharedObject {
-        id: enclave_object_id,
-        initial_shared_version: initial_shared_version.into(),
-        mutable: false,
-    }).unwrap();
 
-    // signature arg, commits to seal wallet address
+    // Build the transaction using sui-sdk-types
+    let mut commands = Vec::new();
+    let mut inputs = Vec::new();
+    
+    // Add pure inputs
+    let id_bytes = "weather_api_key".as_bytes().to_vec();
+    inputs.push(Input::Pure(id_bytes));
+    let id_arg = Argument::Input(0);
+    
+    // Add shared object input
+    inputs.push(Input::Object(ObjectArg::SharedObject {
+        id: enclave_object_id,
+        initial_shared_version,
+        mutable: false,
+    }));
+    let enclave_arg = Argument::Input(1);
+    
+    // Create signature
     let wallet_guard = SEAL_WALLET.read().await;
-    let public_key = wallet_guard.public();
-    let wallet_address: SuiAddress = (&public_key).into();
-    let signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
+    let public_key: Ed25519PublicKey = wallet_guard.public_key();
+    let wallet_address = public_key.derive_address();
+    let signing_payload = wallet_address.as_bytes().to_vec();
     let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
+    
     println!("sig: {:?}", Hex::encode(sig.as_bytes()));
     println!("eph pk: {:?}", Hex::encode(eph_kp.public().as_bytes()));
-    println!("signing_payload: {:?}", Hex::encode(signing_payload));
-
-    let signature_arg = builder.pure(sig.as_bytes()).unwrap();
-
+    println!("signing_payload: {:?}", Hex::encode(&signing_payload));
+    
+    inputs.push(Input::Pure(sig.as_bytes().to_vec()));
+    let signature_arg = Argument::Input(2);
+    
     // Create the type parameter
     let type_arg = TypeTag::from_str(&format!(
         "{}::weather::WEATHER",
         package_id
     ))?;
-
-    builder.programmable_move_call(
-        package_id,
-        Identifier::new("seal_policy").unwrap(),
-        Identifier::new("seal_approve").unwrap(),
-        vec![type_arg],
-        vec![id_arg, enclave_arg, signature_arg],
-    );
-
-    Ok(builder.finish())
+    
+    // Create the move call command
+    commands.push(Command::MoveCall(sui_sdk_types::MoveCall {
+        package: package_id,
+        module: Identifier::from_str("seal_policy")?,
+        function: Identifier::from_str("seal_approve")?,
+        type_arguments: vec![type_arg],
+        arguments: vec![id_arg, enclave_arg, signature_arg],
+    }));
+    
+    Ok(ProgrammableTransaction {
+        inputs,
+        commands,
+    })
 }
