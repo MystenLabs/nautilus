@@ -114,7 +114,7 @@ For the Twitter example, this secret value can be the API Bearer token for your 
 
 ```shell
 cd nautilus/
-make ENCLAVE_APP=<APP> && make run # this builds the enclave and run it, e.g. make ENCLAVE_APP=weather-example
+make ENCLAVE_APP=<APP> && make run # this builds the enclave and run it, e.g. `make ENCLAVE_APP=weather-example`
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
@@ -151,8 +151,7 @@ To test the `process_data` endpoint locally, run the following:
 
 ```shell
 cd src/nautilus-server/
-cargo build --no-default-features --features <APP>
-RUST_LOG=debug API_KEY=045a27812dbe456392913223221306 cargo run
+RUST_LOG=debug API_KEY=045a27812dbe456392913223221306 cargo run --features=weather-example --bin nautilus-server
 
 curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://localhost:3000/process_data
 

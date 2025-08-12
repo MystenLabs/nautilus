@@ -29,6 +29,5 @@ bcs = "0.1.6"
 regex = { version = "1.5", optional = true }
 
 [features]
-default = ["weather"]
-weather = []
-twitter = ["regex"]
+weather-example = []
+twitter-example = ["regex"]

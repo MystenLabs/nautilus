@@ -10,9 +10,11 @@ use serde_json::json;
 
 mod apps {
     #[cfg(feature = "twitter-example")]
+    #[path = "twitter-example/mod.rs"]
     pub mod twitter_example;
 
     #[cfg(feature = "weather-example")]
+    #[path = "weather-example/mod.rs"]
     pub mod weather_example;
 }
 
