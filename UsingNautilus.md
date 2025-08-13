@@ -37,32 +37,36 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
 
 ```shell
 /move
-  /enclave          Shared code. Utility functions to create an enclave config and register public key by providing a valid attestation document.
-  /weather-example  Application logic, uses functions in enclave directory. Start your Nautilus application onchain logic from this example
-  /twitter-example  Another example. 
+  /enclave          Utility functions for generating enclave config and registering the public key with an attestation document.
+  /weather-example  Entry point for onchain logic as an example, which uses enclave functions to run your Nautilus application logic.
+  /twitter-example  Entry point for onchain logic as another example, which uses enclave functions to run your Nautilus application logic. 
 /src
-  /aws              Use without modification. AWS boilerplate.
-  /init             Use without modification. AWS boilerplate.
-  /system           Use without modification. AWS boilerplate.
+  /aws              AWS boilerplate — use as-is without modification.
+  /init             AWS boilerplate — use as-is without modification.
+  /system           AWS boilerplate — use as-is without modification.
   /nautilus-server  Nautilus server that runs inside the enclave.
     /src
       /apps
-        /weather-example  Example. Add another directory and replace it with your own app. 
-          mod.rs  The process_data endpoints and its artifacts for fetching weather. Replace this with your offchain computation logic for process_data.
+        /weather-example  Example directory — replace with your own application logic as needed. 
+          mod.rs  The process_data endpoints and related artifacts to fetch weather data. Replace this with your offchain computation logic.
           allowed_endpoints.yaml  This file lists all endpoints the enclave is allowed to access. By default, the enclave has no internet access unless the parent EC2 instance explicitly forwards traffic. During the configuration step, this file is used to generate the necessary code to enable limited traffic forwarding from the enclave. 
-        /twitter-example  Another example. 
+        /twitter-example  Another example directory with similar parts as for above example. 
           mod.rs
           allowed_endpoints.yaml
-    run.sh          Use without modification. Configures all necessary domains and traffic forwarder, then runs the Rust server inside the enclave.
-    common.rs       Use without modification. Common code for getting attestation.
+    run.sh          Runs the Rust server inside the enclave after configuring domains and the traffic forwarder. Do not modify.
+    common.rs       Common code for retrieving attestation. Do not modify. 
 ```
 
-As a developer, create your own app by creating a directory in `move/your_app` and in `src/nautilus-server/src/your_app`. Refer to other directories for example. Also create your own frontend logic that interacts with the deployed smart contract and deployed Rust server. 
+To create your own Nautilus app:
 
-The rest of the template can remain largely unmodified. 
+* Add a new directory under `move/my_app` for your Move modules.
+* Add a corresponding directory under `src/nautilus-server/src/apps/my_app` for your Rust server logic.
+* Use the existing app directories as references.
+* Build your frontend logic to interact with the deployed Move contract and enclave-hosted Rust server.
+* The rest of the template can remain largely unmodified, streamlining development while giving you full control over app-specific logic.
 
 > [!Note]
-> Frontend code is not included in this guide. The Move call will be demonstrated using the CLI.
+> Frontend code is not included in this guide. The Move call is demonstrated using the CLI.
 
 ## Run the example enclave
 
@@ -100,12 +104,12 @@ Enter secret name: weather-api-key # anything you like
 Enter secret value: 045a27812dbe456392913223221306 # this is an example api key, you can get your own at weatherapi.com
 ```
 
-For the Twitter example, this secret value can be the API Bearer token for your Twitter developer account. 
+For the Twitter example, this secret value refers to the API Bearer Token associated with your Twitter Developer account. 
 
 4. If completed successfully, changes will be generated in `/src/nautilus-server/run.sh` and `expose_enclave.sh`. Commit these changes, as they are required when building the enclave image.
 
 > [!NOTE]
-> - You can add any external domains the enclave needs access to to `allowed_endpoints.yaml`. If you update this file, you’ll need to create a new instance using `configure_enclave.sh`, as the generated code will also change.
+> - To allow the enclave to access additional external domains, add them to `allowed_endpoints.yaml`. If you update this file, you must re-run `configure_enclave.sh` to generate a new instance, as the endpoint list is compiled into the enclave build.
 > - You can optionally create a secret to store any sensitive value you don’t want included in the codebase. The secret is passed to the enclave as an environment variable. You can verify newly created secrets or find existing ARNs in the [AWS Secrets Manager console](https://us-east-1.console.aws.amazon.com/secretsmanager/listsecrets?region=<REGION>).
 
 5. Connect to your instance and clone the repository. For detailed instructions, see [Connect to your Linux instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-ssh.html#connect-linux-inst-sshClient) in the AWS documentation.
@@ -114,7 +118,7 @@ For the Twitter example, this secret value can be the API Bearer token for your 
 
 ```shell
 cd nautilus/
-make ENCLAVE_APP=<APP> && make run # this builds the enclave and run it, e.g. `make ENCLAVE_APP=weather-example`
+make ENCLAVE_APP=<APP> && make run # this builds the enclave and runs it, e.g. `make ENCLAVE_APP=weather-example`
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
@@ -135,10 +139,10 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ## Develop your own Nautilus server
 
-The Nautilus server logic is located in `src/nautilus-server`. To customize the application, refer to `apps/weather-example` or `apps/twitter-example` for example:
+The Nautilus server logic lives in `src/nautilus-server`. To customize the application, refer to `apps/weather-example` or `apps/twitter-example` as templates:
 
-- Create `allowed_endpoints.yaml` for any required domains required by your application.
-- Create `mod.rs` to update the `process_data` endpoint and add new endpoints as needed.
+- Define `allowed_endpoints.yaml` to specify any external domains your application needs to access.
+- Create `mod.rs` to define your `process_data` logic and register any additional endpoints.
 
 The following files typically do not require modification:
 
@@ -265,7 +269,7 @@ sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG
 ENCLAVE_OBJECT_ID=0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a
 ```
 
-You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0x9a50017ab37090ef4b5704eb24201c88b2e4bbad2aad1d4e69ecf1bdfbae9ccb). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a).
+You can view an [example enclave config object](https://testnet.suivision.xyz/object/0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d) containing PCR values on SuiScan. Additionally see an [example enclave object](https://testnet.suivision.xyz/object/0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d) that includes the enclave’s registered public key.
 
 ### Twitter example artifacts
 
@@ -297,9 +301,9 @@ ENCLAVE_OBJECT_ID=0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd9
 ENCLAVE_URL=http://<PUBLIC_IP>:3000
 ```
 
-You can view an example of an enclave config object containing PCRs [here](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a). Also you can view an example of an enclave object containing the enclave public key [here](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d).
+You can view an [example enclave config object](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a) containing PCR values. You can also view an [example enclave object](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d) that includes the registered enclave public key.
 
-The Twitter example frontend code can be found [here](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend). 
+You can find the frontend code for the Twitter example [in this repository](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend). 
 
 ### Enclave management
 
