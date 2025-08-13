@@ -8,7 +8,24 @@ use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
 
-pub mod app;
+mod apps {
+    #[cfg(feature = "twitter-example")]
+    #[path = "twitter-example/mod.rs"]
+    pub mod twitter_example;
+
+    #[cfg(feature = "weather-example")]
+    #[path = "weather-example/mod.rs"]
+    pub mod weather_example;
+}
+
+pub mod app {
+    #[cfg(feature = "twitter-example")]
+    pub use crate::apps::twitter_example::*;
+
+    #[cfg(feature = "weather-example")]
+    pub use crate::apps::weather_example::*;
+}
+
 pub mod common;
 
 /// App state, at minimum needs to maintain the ephemeral keypair.  

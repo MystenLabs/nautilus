@@ -57,8 +57,9 @@ COPY . .
 RUN cargo build --workspace --locked --no-default-features --release --target x86_64-unknown-linux-musl
 
 WORKDIR /src/nautilus-server
+ARG ENCLAVE_APP
 ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-RUN cargo build --locked --no-default-features --release --target x86_64-unknown-linux-musl
+RUN cargo build --locked --no-default-features --features $ENCLAVE_APP --release --target x86_64-unknown-linux-musl
 
 WORKDIR /build_cpio
 ENV KBUILD_BUILD_TIMESTAMP=1
@@ -75,7 +76,6 @@ RUN cp /target/${TARGET}/release/init initramfs
 RUN cp /src/nautilus-server/target/${TARGET}/release/nautilus-server initramfs
 RUN cp /src/nautilus-server/traffic_forwarder.py initramfs/
 RUN cp /src/nautilus-server/run.sh initramfs/
-RUN cp /src/nautilus-server/allowed_endpoints.yaml initramfs/
 
 RUN <<-EOF
     set -eux

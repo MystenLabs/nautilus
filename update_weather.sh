@@ -2,12 +2,12 @@
 
 # Check if all args are provided
 if [ "$#" -ne 8 ]; then
-    echo "Usage: $0 <examples_package_id> <module_name> <otw_name> <enclave_object_id> <signature_hex> <timestamp_ms> <location> <temperature>"
+    echo "Usage: $0 <app_package_id> <module_name> <otw_name> <enclave_object_id> <signature_hex> <timestamp_ms> <location> <temperature>"
     echo "Example: $0 0x2b70e34684d696a0a2847c793ee1e5b88a23289a7c04dd46249b95a9823367d9 weather WEATHER 0x5fc237c75757e47c5819b3f25bab6acc6c45c39db320a109e12c8c4468103438 bb0d315f8904f298288249c5d4498cb4904dad07f1ab149e59c7d0d1d39f5865fabc40f1cc927248fe6e381417fedbdb0d9df76eee86493977d347fdfe998e00 1743982200000 'San Francisco' 0"
     exit 1
 fi
 
-EXAMPLES_PACKAGE_ID=$1
+APP_PACKAGE_ID=$1
 MODULE_NAME=$2
 OTW_NAME=$3
 ENCLAVE_OBJECT_ID=$4
@@ -32,7 +32,7 @@ EOF
 echo "converted sig, length=${#SIG_ARRAY}"
 
 sui client ptb \
-    --move-call "${EXAMPLES_PACKAGE_ID}::weather::update_weather<${EXAMPLES_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" \
+    --move-call "${APP_PACKAGE_ID}::weather::update_weather<${APP_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" \
         "\"$LOCATION\"" \
         $TEMPERATURE \
         $TIMESTAMP_MS \

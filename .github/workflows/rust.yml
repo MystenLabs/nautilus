@@ -42,8 +42,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - ubuntu-ghcloud
+        os: [ubuntu-ghcloud]
+        feature: [weather-example, twitter-example]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
@@ -51,28 +51,30 @@ jobs:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
       - uses: taiki-e/install-action@d30f7ecb94d4d882276efb3967be14b8ef34d289 # pin@nextest
-      # make sure benches don't bit-rot
-      - name: cargo test
+      - name: cargo test (${{ matrix.feature }})
         working-directory: src/nautilus-server
-        run: cargo test --all-features
-      - name: Doctests
+        run: cargo test --no-default-features --features ${{ matrix.feature }}
+      - name: Doctests (${{ matrix.feature }})
         working-directory: src/nautilus-server
-        run: |
-          cargo test --doc --all-features
-      # Ensure there are no uncommitted changes in the repo after running tests
+        run: cargo test --doc --no-default-features --features ${{ matrix.feature }}
+      # Ensure there are no uncommitted changes after tests
       - run: scripts/changed-files.sh
 
   clippy:
+    name: cargo clippy (${{ matrix.feature }})
     runs-on: ubuntu-ghcloud
+    strategy:
+      matrix:
+        feature: [weather-example, twitter-example]
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
         with:
           components: clippy
       # See '.cargo/config' for list of enabled/disabled clippy lints
-      - name: cargo clippy
+      - name: cargo clippy (${{ matrix.feature }})
         working-directory: src/nautilus-server
-        run: cargo xclippy -D warnings
+        run: cargo clippy --no-default-features --features ${{ matrix.feature }} -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest

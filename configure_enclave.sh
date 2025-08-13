@@ -24,7 +24,7 @@ show_help() {
     echo "  # optional: export REGION=<your-region>  (defaults to us-east-1)"
     echo "  # optional: export AMI_ID=<your-ami-id>  (defaults to ami-085ad6ae776d8f09c)"
     echo "  # optional: export API_ENV_VAR_NAME=<env-var-name> (defaults to 'API_KEY')"
-    echo "  ./configure_enclave.sh"
+    echo "  ./configure_enclave.sh <APP>"
     echo ""
     echo "Options:"
     echo "  -h, --help    Show this help message"
@@ -34,6 +34,17 @@ show_help() {
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     show_help
     exit 0
+fi
+
+# Check for required APP argument
+if [ -z "$1" ]; then
+    echo "Error: APP argument is required."
+    echo "Usage: ./configure_enclave.sh <APP>"
+    echo "Example: ./configure_enclave.sh twitter-example"
+    echo "Example: ./configure_enclave.sh weather-example"
+    echo ""
+    echo "For more information, run: ./configure_enclave.sh --help"
+    exit 1
 fi
 
 ############################
@@ -49,6 +60,9 @@ AMI_ID="${AMI_ID:-ami-085ad6ae776d8f09c}"
 # Environment variable name for our secret; default is 'API_KEY'
 API_ENV_VAR_NAME="${API_ENV_VAR_NAME:-API_KEY}"
 
+ENCLAVE_APP="${1}"
+ALLOWLIST_PATH="src/nautilus-server/src/apps/${ENCLAVE_APP}/allowed_endpoints.yaml"
+
 ############################
 # Cleanup Old Files
 ############################
@@ -63,7 +77,6 @@ if [ -z "$KEY_PAIR" ]; then
     echo "Error: Environment variable KEY_PAIR is not set. Please export KEY_PAIR=<your-key-name>."
     exit 1
 fi
-
 # Check if yq is available
 if ! command -v yq >/dev/null 2>&1; then
   echo "Error: yq is not installed."
@@ -93,11 +106,11 @@ echo "Instance will be named: $FINAL_INSTANCE_NAME"
 #########################################
 # Read endpoints from allowed_endpoints.yaml
 #########################################
-if [ -f "src/nautilus-server/allowed_endpoints.yaml" ]; then
+if [ -f "$ALLOWLIST_PATH" ]; then
     # Use a small Python snippet to parse the YAML and emit space-separated endpoints
-    ENDPOINTS=$(yq e '.endpoints | join(" ")' src/nautilus-server/allowed_endpoints.yaml 2>/dev/null)
+    ENDPOINTS=$(yq e '.endpoints | join(" ")' $ALLOWLIST_PATH 2>/dev/null)
     if [ -n "$ENDPOINTS" ]; then
-        echo "Endpoints found in src/nautilus-server/allowed_endpoints.yaml (before region patching):"
+        echo "Endpoints found in $ALLOWLIST_PATH (before region patching):"
         echo "$ENDPOINTS"
 
         # Replace any existing region (like us-east-1, us-west-2, etc.) in kms.* / secretsmanager.* with the user-provided $REGION.
@@ -108,10 +121,10 @@ if [ -f "src/nautilus-server/allowed_endpoints.yaml" ]; then
         echo "Endpoints after region patching:"
         echo "$ENDPOINTS"
     else
-        echo "No endpoints found in src/nautilus-server/allowed_endpoints.yaml. Continuing without additional endpoints."
+        echo "No endpoints found in $ALLOWLIST_PATH. Continuing without additional endpoints."
     fi
 else
-    echo "src/nautilus-server/allowed_endpoints.yaml not found. Continuing without additional endpoints."
+    echo "$ALLOWLIST_PATH not found. Continuing without additional endpoints."
     ENDPOINTS=""
 fi
 
@@ -149,6 +162,11 @@ if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
           --secret-string "$SECRET_VALUE" \
           --region "$REGION" \
           --query 'ARN' --output text)
+        if [ $? -ne 0 ] || [ -z "$SECRET_ARN" ]; then
+            echo "Failed to create secret '$SECRET_NAME'."
+            echo "Make sure AWS credentials are configured, e.g. AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN."
+            exit 1
+        fi
         echo "Secret created with ARN: $SECRET_ARN"
 
         # Create IAM Role, Policy, and Instance Profile for Secret Access
@@ -570,5 +588,5 @@ echo "[*] Commit the code generated in expose_enclave.sh and src/nautilus-server
 echo "[*] Please wait 2-3 minutes for the instance to finish the init script before sshing into it."
 echo "[*] ssh inside the launched EC2 instance. e.g. \`ssh ec2-user@\"$PUBLIC_IP\"\` assuming the ssh-key is loaded into the agent."
 echo "[*] Clone or copy the repo with the above generated code."
-echo "[*] Inside repo directory: 'make' and then 'make run'"
+echo "[*] Inside repo directory: 'make ENCLAVE_APP=<APP>' and then 'make run'"
 echo "[*] Run expose_enclave.sh from within the EC2 instance to expose the enclave to the internet."
