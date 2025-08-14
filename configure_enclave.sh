@@ -13,7 +13,7 @@ show_help() {
     echo ""
     echo "Pre-requisites:"
     echo "  - allowed_endpoints.yaml is configured with all necessary endpoints that the enclave needs"
-    echo "    access to. This is necessary since the enclave doesn't not come with Internet connection,"
+    echo "    access to. This is necessary since the enclave does not come with Internet connection,"
     echo "    all traffics needs to be preconfigured for traffic forwarding."
     echo "  - AWS CLI is installed and configured with proper credentials"
     echo "  - The environment variable KEY_PAIR is set (e.g., export KEY_PAIR=my-key)"
@@ -131,12 +131,19 @@ fi
 #########################################
 # Decide about secrets (3 scenarios)
 #########################################
-read -p "Do you want to use a secret? (y/n): " USE_SECRET
+# Check if this is the seal example - skip AWS secret prompts entirely
+if [[ "$ENCLAVE_APP" == "seal-example" ]]; then
+    echo "Seal example detected. Configuring without AWS secrets..."
+    USE_SECRET="n"
+    IS_SEAL_EXAMPLE=true
+else
+    read -p "Do you want to use a secret? (y/n): " USE_SECRET
 
-# Validate input
-if [[ ! "$USE_SECRET" =~ ^[YyNn]$ ]]; then
-    echo "Error: Please enter 'y' or 'n'"
-    exit 1
+    # Validate input
+    if [[ ! "$USE_SECRET" =~ ^[YyNn]$ ]]; then
+        echo "Error: Please enter 'y' or 'n'"
+        exit 1
+    fi
 fi
 
 if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
@@ -153,6 +160,12 @@ if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
         # Create a new secret
         #----------------------------------------------------
         read -p "Enter secret name: " USER_SECRET_NAME
+    fi
+fi
+
+# Re-check USE_SECRET after potential seal detection
+if [[ "$USE_SECRET" =~ ^[Yy]$ ]]; then
+    if [[ "$SECRET_CHOICE" =~ ^([Nn]ew|NEW)$ ]]; then
         read -s -p "Enter secret value: " SECRET_VALUE
         echo ""
         SECRET_NAME="${USER_SECRET_NAME}"
@@ -358,18 +371,71 @@ echo \"\$SECRET_VALUE\" | jq -R '{\"${API_ENV_VAR_NAME}\": .}' > secrets.json" e
 
 else
     #-----------------------------------------
-    # No secret at all
+    # No secret configuration
     #-----------------------------------------
+    echo "Configuring without AWS secrets..."
+    
+    # Clear IAM-related variables
     IAM_INSTANCE_PROFILE_OPTION=""
     ROLE_NAME=""
 
-    # Remove references
+    # Remove any existing secret references from expose_enclave.sh
+    echo "Removing secret references from expose_enclave.sh..."
     if [[ "$(uname)" == "Darwin" ]]; then
         sed -i '' '/SECRET_VALUE=/d' expose_enclave.sh 2>/dev/null || true
         sed -i '' '/echo.*secrets\.json/d' expose_enclave.sh 2>/dev/null || true
     else
         sed -i '/SECRET_VALUE=/d' expose_enclave.sh 2>/dev/null || true
         sed -i '/echo.*secrets\.json/d' expose_enclave.sh 2>/dev/null || true
+    fi
+    
+    # Handle seal example specifically
+    if [ "$IS_SEAL_EXAMPLE" = true ]; then
+        echo "Configuring seal example..."
+        
+        # Add empty secrets.json (required by run.sh which waits for it on VSOCK)
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sed -i '' "/# Secrets-block/a\\
+# Seal example: create empty secrets.json (required by run.sh)\\
+echo 'Creating empty secrets.json for seal example...'\\
+echo '{}' > secrets.json\\
+" expose_enclave.sh
+            
+            # Expose port 3001 for localhost-only access to seal init endpoint
+            sed -i '' "/socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3000 &/a\\
+\\
+# Seal example: Expose port 3001 for localhost-only access to init endpoint\\
+echo \"Exposing seal init endpoint on localhost:3001...\"\\
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3001 &\\
+" expose_enclave.sh
+        else
+            sed -i "/# Secrets-block/a\\
+# Seal example: create empty secrets.json (required by run.sh)\\
+echo 'Creating empty secrets.json for seal example...'\\
+echo '{}' > secrets.json" expose_enclave.sh
+            
+            # Expose port 3001 for localhost-only access to seal init endpoint
+            sed -i "/socat TCP4-LISTEN:3000,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3000 &/a\\
+\\
+# Seal example: Expose port 3001 for localhost-only access to init endpoint\\
+echo \"Exposing seal init endpoint on localhost:3001...\"\\
+socat TCP4-LISTEN:3001,bind=127.0.0.1,reuseaddr,fork VSOCK-CONNECT:\$ENCLAVE_CID:3001 &" expose_enclave.sh
+        fi
+    else
+        # Regular no-secret configuration
+        echo "Standard no-secret configuration applied."
+        
+        # Add empty secrets.json for compatibility with run.sh
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sed -i '' "/# Secrets-block/a\\
+# No secrets: create empty secrets.json for compatibility\\
+echo '{}' > secrets.json\\
+" expose_enclave.sh
+        else
+            sed -i "/# Secrets-block/a\\
+# No secrets: create empty secrets.json for compatibility\\
+echo '{}' > secrets.json" expose_enclave.sh
+        fi
     fi
 fi
 
@@ -393,6 +459,16 @@ sudo systemctl start docker && sudo systemctl enable docker
 sudo systemctl enable nitro-enclaves-vsock-proxy.service
 EOF
 
+# Add Rust installation for seal example only
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    cat <<'EOF' >> user-data.sh
+
+# Install Rust and cargo for seal example
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | su - ec2-user -c "sh -s -- -y"
+echo 'source $HOME/.cargo/env' >> /home/ec2-user/.bashrc
+EOF
+fi
+
 # Append endpoint configuration to the vsock-proxy YAML if endpoints were provided.
 if [ -n "$ENDPOINTS" ]; then
     for ep in $ENDPOINTS; do
@@ -401,7 +477,7 @@ if [ -n "$ENDPOINTS" ]; then
 fi
 
 # Continue the user-data script
-cat <<EOF >> user-data.sh
+cat <<'EOF' >> user-data.sh
 # Stop the allocator so we can modify its configuration
 sudo systemctl stop nitro-enclaves-allocator.service
 
@@ -501,6 +577,23 @@ rm "$tmp_traffic"
 
 echo "updated run.sh"
 
+# Add seal-specific vsock listener for port 3001
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    echo "Adding seal-specific port 3001 vsock listener to run.sh..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' '/socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &/a\
+\
+# For seal-example: Listen on VSOCK Port 3001 and forward to localhost 3001\
+socat VSOCK-LISTEN:3001,reuseaddr,fork TCP:localhost:3001 &' src/nautilus-server/run.sh
+    else
+        sed -i '/socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &/a\
+\
+# For seal-example: Listen on VSOCK Port 3001 and forward to localhost 3001\
+socat VSOCK-LISTEN:3001,reuseaddr,fork TCP:localhost:3001 &' src/nautilus-server/run.sh
+    fi
+    echo "Added port 3001 vsock listener for seal example"
+fi
+
 ############################
 # Create or Use Security Group
 ############################
@@ -590,3 +683,17 @@ echo "[*] ssh inside the launched EC2 instance. e.g. \`ssh ec2-user@\"$PUBLIC_IP
 echo "[*] Clone or copy the repo with the above generated code."
 echo "[*] Inside repo directory: 'make ENCLAVE_APP=<APP>' and then 'make run'"
 echo "[*] Run expose_enclave.sh from within the EC2 instance to expose the enclave to the internet."
+
+if [ "$IS_SEAL_EXAMPLE" = true ]; then
+    echo ""
+    echo "=== SEAL EXAMPLE INSTRUCTIONS ==="
+    echo "[*] After running expose_enclave.sh, initialize the enclave with encrypted secrets:"
+    echo "    ./src/nautilus-server/target/debug/seal-init-client \\"
+    echo "        --api-key <YOUR_API_KEY> \\"
+    echo "        --package-id <PACKAGE_ID> \\"
+    echo "        --key-servers <KEY_SERVER_IDS> \\"
+    echo "        --threshold <THRESHOLD>"
+    echo ""
+    echo "[*] You can add multiple secrets by calling the endpoint multiple times."
+    echo "[*] The init endpoint is exposed on localhost:3001 for host-only access."
+fi

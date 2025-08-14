@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
 
-use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519Signature};
 /// ==== COMMON TYPES ====
 
 /// Intent message wrapper struct containing the intent scope and timestamp.
@@ -77,7 +77,7 @@ pub fn to_signed_response<T: Serialize + Clone>(
     };
 
     let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
-    let sig = kp.sign(&signing_payload);
+    let sig: Ed25519Signature = kp.sign(&signing_payload);
     ProcessedDataResponse {
         response: intent_msg,
         signature: Hex::encode(sig),
