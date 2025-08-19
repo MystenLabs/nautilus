@@ -222,7 +222,7 @@ async fn create_ptb(
         },
         // Input 2: signature arg
         Input::Pure {
-            value: sig.as_bytes().to_vec(),
+            value: bcs::to_bytes(&sig.as_bytes().to_vec())?,
         },
     ];
 
