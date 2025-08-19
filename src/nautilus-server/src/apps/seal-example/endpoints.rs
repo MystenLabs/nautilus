@@ -200,7 +200,7 @@ async fn create_ptb(
     println!("enclave_object_id: {:?}", enclave_object_id);
 
     let old_signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
-    let signing_payload = wallet_address.to_bytes();
+    let signing_payload = wallet_address.as_bytes();
     let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
 
     println!("sig: {:?}", Hex::encode(sig.as_bytes()));
