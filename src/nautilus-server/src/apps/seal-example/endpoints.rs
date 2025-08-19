@@ -51,8 +51,7 @@ pub async fn init_parameter_load(
     info!("Initializing parameter load for session: {}", session_id);
 
     let wallet_guard = SEAL_WALLET.read().await;
-    let wallet_pk = wallet_guard.public_key();
-    let wallet_address = wallet_pk.to_address();
+    let wallet_address = wallet_guard.public_key().to_address();
 
     // Parse package ID from config
     let package_id = ObjectID::from_str(&request.package_id)
@@ -80,13 +79,12 @@ pub async fn init_parameter_load(
         ttl_min,
     );
 
-    let wallet_guard = SEAL_WALLET.read().await;
     let signature = wallet_guard
         .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
         .unwrap();
 
     let certificate = Certificate {
-        user: Address::from_str(&wallet_address.to_string()).unwrap(),
+        user: wallet_address,
         session_vk: session.public().clone(),
         creation_time,
         ttl_min,
@@ -101,10 +99,12 @@ pub async fn init_parameter_load(
     let package_id = ObjectID::from_str(&request.package_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid package ID in request: {}", e))
     })?;
+    println!("certificate.user: {:?}", certificate.user);
     let ptb = create_ptb(
         package_id,
         enclave_object_id,
         request.initial_shared_version,
+        wallet_address,
         &state.eph_kp,
     )
     .await
@@ -193,14 +193,12 @@ async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
     initial_shared_version: u64,
+    wallet_address: Address,
     eph_kp: &Ed25519KeyPair,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     println!("package_id: {:?}", package_id);
     println!("enclave_object_id: {:?}", enclave_object_id);
 
-    let wallet_guard = SEAL_WALLET.read().await;
-    let public_key = wallet_guard.public_key();
-    let wallet_address = public_key.to_address();
     let signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
     let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
 
