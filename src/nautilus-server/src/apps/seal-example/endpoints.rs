@@ -199,13 +199,15 @@ async fn create_ptb(
     println!("package_id: {:?}", package_id);
     println!("enclave_object_id: {:?}", enclave_object_id);
 
-    let signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
+    let old_signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
+    let signing_payload = wallet_address.to_bytes();
     let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
 
     println!("sig: {:?}", Hex::encode(sig.as_bytes()));
     println!("eph pk: {:?}", Hex::encode(eph_kp.public().as_bytes()));
     println!("wallet address: {:?}", Hex::encode(wallet_address.as_bytes()));
-
+    println!("signing_payload: {:?}", Hex::encode(signing_payload));
+    println!("old_signing_payload: {:?}", Hex::encode(old_signing_payload));
     // Create inputs
     let inputs = vec![
         // Input 0: id arg

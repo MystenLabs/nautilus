@@ -16,9 +16,23 @@ entry fun seal_approve<T: drop>(_id: vector<u8>, enclave: &Enclave<T>, signature
 
 #[test]
 fun test_seal_approve() {
-    let sig = x"be1f1ac696a76b798b57e05a379cb6214b9604d2c382e542fb7cab9bfd7cfb9be4db8a8510a340a4037c38c40d6f2bdacfe6cd5fc34cd1e8d75390f0d219da00";
-    let eph_pk = x"4292c5545bb6b321340100102f6cd116728b7605a5dcb3490e5f2ddf406a362e";
-    let address = sui::address::from_bytes(x"e5556f937d08f31eee769cd256a3167a3c03bef7566735e7337488b4de5f39e9");
+    let sig = x"bde3f4b7d5c2209b1aa84024798b6c478fa4887fa76024c3ceebb64f327c2d357a8bb3c2fec4527d969af2c419e7179807f016d74200e6087579f2d412364400";
+    let eph_pk = x"4353fe686284143eb1752e8b78e92951998004b3945ae12829489978b03ac103";
+    let address = sui::address::from_bytes(x"e72cf2f4c13c7d969777b945d289b1c56f1f040bc4a4c50bc223f99649d79fcf");
     let signing_payload = bcs::to_bytes(&address);
+    
+    // Debug: print the BCS bytes to verify encoding
+    std::debug::print(&signing_payload);
+    
     assert!(ed25519::ed25519_verify(&sig, &eph_pk, &signing_payload), ENoAccess);
+}
+
+#[test]
+fun test_bcs_encoding_direct() {
+    let address = @0xe72cf2f4c13c7d969777b945d289b1c56f1f040bc4a4c50bc223f99649d79fcf;
+    let signing_payload = bcs::to_bytes(&address);
+    
+    // This should be exactly 32 bytes (the address itself)
+    std::debug::print(&signing_payload);
+    assert!(signing_payload == x"e72cf2f4c13c7d969777b945d289b1c56f1f040bc4a4c50bc223f99649d79fcf", 0);
 }
