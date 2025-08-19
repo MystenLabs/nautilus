@@ -50,15 +50,12 @@ pub async fn init_parameter_load(
     let session_id = uuid::Uuid::new_v4().to_string();
     info!("Initializing parameter load for session: {}", session_id);
 
-    // Use cached config
-    let config = &*SEAL_CONFIG;
-
     let wallet_guard = SEAL_WALLET.read().await;
     let wallet_pk = wallet_guard.public_key();
     let wallet_address = wallet_pk.to_address();
 
     // Parse package ID from config
-    let package_id = ObjectID::from_str(&config.package_id)
+    let package_id = ObjectID::from_str(&request.package_id)
         .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
 
     let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
@@ -101,6 +98,9 @@ pub async fn init_parameter_load(
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
 
+    let package_id = ObjectID::from_str(&request.package_id).map_err(|e| {
+        EnclaveError::GenericError(format!("Invalid package ID in request: {}", e))
+    })?;
     let ptb = create_ptb(
         package_id,
         enclave_object_id,

@@ -5,7 +5,6 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::serde_helpers::ToFromByteArray;
@@ -19,10 +18,9 @@ use sui_types::base_types::ObjectID;
 use sui_sdk_types::ObjectId as NewObjectID;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::TypeTag;
-
+use reqwest::Body;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SealConfig {
-    pub package_id: String,
     pub key_servers: Vec<String>,
     pub public_keys: Vec<String>,
     pub threshold: u8,
@@ -153,6 +151,10 @@ enum Commands {
         /// Path to seal_config.yaml file
         #[arg(short = 'c', long)]
         config: String,
+
+        /// Package ID
+        #[arg(short = 'p', long)]
+        package_id: String,
     },
 
     /// Fetch keys from Seal servers using hex blob from init response
@@ -171,6 +173,7 @@ async fn handle_encrypt(
     secret: String,
     key_name: String,
     config_path: String,
+    package_id: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load config file
     let config: SealConfig = if Path::new(&config_path).exists() {
@@ -182,8 +185,7 @@ async fn handle_encrypt(
         return Err(format!("Config file not found: {}", config_path).into());
     };
 
-    let package_id =
-    NewObjectID::from_str(&config.package_id).map_err(|e| format!("Invalid package ID: {}", e))?;
+    let package_id = NewObjectID::from_str(&package_id).map_err(|e| format!("Invalid package ID: {}", e))?;
 
     let key_servers: Vec<[u8; 32]> = config
         .key_servers
@@ -258,7 +260,7 @@ async fn handle_fetch_keys(
 
     println!(
         "fetch_keys_request: {:?}",
-        serde_json::to_string(&request).unwrap()
+        request.to_json_string().unwrap()
     );
     let config: SealConfig = if Path::new(&config_path).exists() {
         let config_str = fs::read_to_string(&config_path)
@@ -296,7 +298,7 @@ async fn handle_fetch_keys(
             .header("Client-Sdk-Type", "rust")
             .header("Client-Sdk-Version", "1.0.0")
             .header("Content-Type", "application/json")
-            .json(&request)
+            .body(Body::from(request.to_json_string().unwrap()))
             .send()
             .await
         {
@@ -357,8 +359,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             secret,
             key_name,
             config,
+            package_id,
         } => {
-            handle_encrypt(secret, key_name, config).await?;
+            handle_encrypt(secret, key_name, config, package_id).await?;
         }
 
         Commands::FetchKeys {
