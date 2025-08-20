@@ -587,7 +587,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.4.7"
-source = "git+https://github.com/MystenLabs/seal?rev=661cac13859b87fb443ad2e870acd9c69ceaff0a#661cac13859b87fb443ad2e870acd9c69ceaff0a"
+source = "git+https://github.com/MystenLabs/seal?rev=596cd3181c0701174f2540e8516c4dd50b159b43#596cd3181c0701174f2540e8516c4dd50b159b43"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -2348,13 +2348,14 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "seal-sdk"
 version = "0.4.7"
-source = "git+https://github.com/MystenLabs/seal?rev=661cac13859b87fb443ad2e870acd9c69ceaff0a#661cac13859b87fb443ad2e870acd9c69ceaff0a"
+source = "git+https://github.com/MystenLabs/seal?rev=596cd3181c0701174f2540e8516c4dd50b159b43#596cd3181c0701174f2540e8516c4dd50b159b43"
 dependencies = [
  "bcs",
  "chrono",
  "crypto",
  "fastcrypto",
  "serde",
+ "serde_json",
  "sui-sdk-types",
  "tracing",
 ]
