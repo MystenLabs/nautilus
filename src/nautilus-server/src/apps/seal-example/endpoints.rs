@@ -147,10 +147,13 @@ pub async fn complete_parameter_load(
         EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
     })?;
 
+    let services = encrypted_object.services.iter().map(|service| {
+        ObjectID::new(service.0.clone().try_into().unwrap())
+    }).collect::<Vec<_>>();
+
     let mut all_keys = HashMap::new();
-    seal_responses.iter().for_each(|response| {
-        println!("response: {:?}", response);
-        let object_id = ObjectID::new(response.decryption_keys[0].id.clone().try_into().unwrap());
+    seal_responses.into_iter().zip(services).for_each(|(response, service)| {
+        let object_id = ObjectID::new(service.clone().try_into().unwrap());
         // todo: handle array
         let user_secret_key =
             elgamal_decrypt(&enc_secret, &response.decryption_keys[0].encrypted_key);
