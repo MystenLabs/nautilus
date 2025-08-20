@@ -149,6 +149,7 @@ pub async fn complete_parameter_load(
 
     let mut all_keys = HashMap::new();
     seal_responses.iter().for_each(|response| {
+        println!("response: {:?}", response);
         let object_id = ObjectID::new(response.decryption_keys[0].id.clone().try_into().unwrap());
         // todo: handle array
         let user_secret_key =

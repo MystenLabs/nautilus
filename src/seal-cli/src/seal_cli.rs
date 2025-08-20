@@ -226,7 +226,7 @@ async fn handle_encrypt(
         aad: None,
     };
 
-    let encrypted_object = seal_encrypt(
+    let (encrypted_object, _) = seal_encrypt(
         package_id.into(),
         key_name.as_bytes().to_vec(),
         key_servers
