@@ -12,7 +12,7 @@ sui-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0" }
 sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui", rev = "42ba6c0" }
 clap = { version = "4.0", features = ["derive"] }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c71fb37e3d22fe85e5bbfd4256d61422b9", features = ["aes"] }
-seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "596cd3181c0701174f2540e8516c4dd50b159b43", package = "seal-sdk" }
+seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "7b655e6d12357169dfc5e5dcfbeaa9e92cfd026f", package = "seal-sdk" }
 serde = "1.0"
 tokio = { version = "1.43.0", features = ["full"] }
 sui-sdk-types = { git = "https://github.com/mystenlabs/sui-rust-sdk", features = ["serde"], rev = "86a9e06" }

@@ -23,7 +23,7 @@ use seal_sdk::Certificate;
 use seal_sdk::IBEPublicKey;
 use seal_sdk::IBEUserSecretKeys;
 use seal_sdk::{seal_decrypt, EncryptedObject, IBEPublicKeys};
-use seal_sdk::{signed_message, signed_request};
+use seal_sdk::{signed_message, signed_request, ibe_verify_user_secret_key};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ pub async fn init_parameter_load(
 
     let signature = wallet_guard
         .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
-        .unwrap();
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to sign personal message: {}", e)))?;
 
     let certificate = Certificate {
         user: wallet_address,
@@ -104,6 +104,7 @@ pub async fn init_parameter_load(
         enclave_object_id,
         request.initial_shared_version,
         wallet_address,
+        request.key_name,
         &state.eph_kp,
     )
     .await
@@ -112,7 +113,7 @@ pub async fn init_parameter_load(
     let request_signature = session.sign(&request_message);
 
     let request = FetchKeyRequest {
-        ptb: Base64::encode(bcs::to_bytes(&ptb).unwrap()),
+        ptb: Base64::encode(bcs::to_bytes(&ptb).expect("should not fail")),
         enc_key,
         enc_verification_key,
         request_signature,
@@ -120,7 +121,7 @@ pub async fn init_parameter_load(
     };
 
     Ok(Json(InitParameterLoadResponse {
-        encoded_request: Hex::encode(bcs::to_bytes(&request).unwrap()),
+        encoded_request: Hex::encode(bcs::to_bytes(&request).expect("should not fail")),
     }))
 }
 
@@ -133,13 +134,12 @@ pub async fn complete_parameter_load(
     let encrypted_object: EncryptedObject = bcs::from_bytes(
         &Hex::decode(&request.encrypted_object)
             .map_err(|e| EnclaveError::GenericError(format!("Invalid hex encoding: {}", e)))?,
-    )
-    .unwrap();
+    ).map_err(|e| EnclaveError::GenericError(format!("Failed to parse encrypted object: {}", e)))?;
     let seal_responses: Vec<FetchKeyResponse> = bcs::from_bytes(
         &Hex::decode(&request.seal_responses)
             .map_err(|e| EnclaveError::GenericError(format!("Invalid hex encoding: {}", e)))?,
     )
-    .unwrap();
+    .map_err(|e| EnclaveError::GenericError(format!("Failed to parse seal responses: {}", e)))?;
 
     let enc_secret_guard = (*ENC_SECRET).read().await;
     let enc_secret = enc_secret_guard.as_ref().ok_or_else(|| {
@@ -147,20 +147,6 @@ pub async fn complete_parameter_load(
     })?;
 
     let mut all_keys = HashMap::new();
-    println!("Number of services: {}", encrypted_object.services.len());
-    println!("Number of responses: {}", seal_responses.len());
-  
-    for (i, (response, (service_id, index))) in seal_responses.iter().zip(&encrypted_object.services).enumerate() {
-        println!("Response {}: service_id={:?}, index={}", i, service_id, index);
-        let user_secret_key = elgamal_decrypt(&enc_secret, &response.decryption_keys[0].encrypted_key);
-        println!("Decrypted USK {}: {:?}", i, user_secret_key);
-        all_keys.insert(*service_id, user_secret_key);
-    }
-  
-    println!("Package ID: {:?}", encrypted_object.package_id);
-    println!("Inner ID: {:?}", encrypted_object.id);
-
-    let user_secret_keys = IBEUserSecretKeys::BonehFranklinBLS12381(all_keys);
 
     let config = &*SEAL_CONFIG;
     let pks: Vec<IBEPublicKey> = config
@@ -178,6 +164,21 @@ pub async fn complete_parameter_load(
         )
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| EnclaveError::GenericError(format!("Failed to parse public keys: {}", e)))?;
+
+    for (i, seal_response) in seal_responses.iter().enumerate() {
+        let service_id = encrypted_object.services[i].0;
+        let public_key = pks[i];
+        let user_secret_key = elgamal_decrypt(&enc_secret, &seal_response.decryption_keys[0].encrypted_key);
+        println!("Decrypted USK {}: {:?}", i, user_secret_key);
+        ibe_verify_user_secret_key(
+            &user_secret_key,
+            &seal_response.decryption_keys[0].id,
+            &public_key
+        ).map_err(|e| EnclaveError::GenericError(format!("Failed to verify user secret key: {}", e)))?;
+        all_keys.insert(service_id, user_secret_key);
+    }
+
+    let user_secret_keys = IBEUserSecretKeys::BonehFranklinBLS12381(all_keys);
 
     let public_keys = IBEPublicKeys::BonehFranklinBLS12381(pks);
 
@@ -197,6 +198,7 @@ async fn create_ptb(
     enclave_object_id: ObjectID,
     initial_shared_version: u64,
     wallet_address: Address,
+    key_name: String,
     eph_kp: &Ed25519KeyPair,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     println!("package_id: {:?}", package_id);
@@ -221,7 +223,7 @@ async fn create_ptb(
     let inputs = vec![
         // Input 0: id arg
         Input::Pure {
-            value: bcs::to_bytes("weather_api_key".as_bytes())?,
+            value: bcs::to_bytes(key_name.as_bytes())?,
         },
         // Input 1: enclave arg (shared object)
         Input::Shared {

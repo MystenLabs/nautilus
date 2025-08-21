@@ -145,7 +145,7 @@ enum Commands {
         secret: String,
 
         /// Name for the secret (default: API_KEY)
-        #[arg(short = 'n', long, default_value = "API_KEY")]
+        #[arg(short = 'n', long)]
         key_name: String,
 
         /// Path to seal_config.yaml file
@@ -258,10 +258,6 @@ async fn handle_fetch_keys(
     let request: FetchKeyRequest = bcs::from_bytes(&bytes)
         .map_err(|e| format!("Failed to parse FetchKeyRequest from BCS: {}", e))?;
 
-    println!(
-        "fetch_keys_request: {:?}",
-        request.to_json_string().unwrap()
-    );
     let config: SealConfig = if Path::new(&config_path).exists() {
         let config_str = fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
@@ -274,23 +270,17 @@ async fn handle_fetch_keys(
     println!("Fetching Seal keys...");
 
     let client = reqwest::Client::new();
-
     let sui_rpc_url = config.rpc_url;
-    println!("Using Sui RPC: {}", sui_rpc_url);
 
     // Get key server IDs from config
     let key_server_ids = config.key_servers.clone();
 
     let key_servers = fetch_key_server_urls(&key_server_ids, &sui_rpc_url).await?;
-    println!("  Found {} key servers", key_servers.len());
-
-    // Step 2: Fetch keys from Seal servers
-    println!("\nStep 2: Fetching keys from Seal servers...");
 
     let mut seal_responses = Vec::new();
     for server in &key_servers {
         println!(
-            "  Fetching from {} ({}/v1/fetch_key)",
+            "Fetching from {} ({}/v1/fetch_key)",
             server.name, server.url
         );
         match client
@@ -307,24 +297,23 @@ async fn handle_fetch_keys(
                     let response_bytes = response.bytes().await.unwrap();
                     let response: FetchKeyResponse = serde_json::from_slice(&response_bytes)
                         .expect("Failed to deserialize response");
-                    println!("response: {:?}", serde_json::to_string(&response).unwrap());
                     seal_responses.push(response);
-                    println!("    ✓ Success");
+                    println!("\n Success {}", server.name);
                 } else {
                     let error_text = response
                         .text()
                         .await
                         .unwrap_or_else(|_| "Unknown error".to_string());
-                    eprintln!("    ✗ Server returned error: {}", error_text);
+                    eprintln!("Server returned error: {}", error_text);
                 }
             }
             Err(e) => {
-                eprintln!("    ✗ Failed: {}", e);
+                eprintln!("Failed: {}", e);
             }
         }
 
         if seal_responses.len() >= config.threshold as usize {
-            println!("  Reached threshold of {} responses", config.threshold);
+            println!("Reached threshold of {} responses", config.threshold);
             break;
         }
     }
@@ -339,13 +328,9 @@ async fn handle_fetch_keys(
     }
 
     println!(
-        "\n✓ Successfully fetched {} seal responses",
-        seal_responses.len()
-    );
-
-    println!(
-        "Seal responses: {:?}",
-        Hex::encode(bcs::to_bytes(&seal_responses).unwrap())
+        "\n {:?} Seal responses: {:?}",
+        seal_responses.len(),
+        Hex::encode(bcs::to_bytes(&seal_responses).expect("should not fail"))
     );
     Ok(())
 }
