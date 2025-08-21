@@ -19,6 +19,7 @@ use seal_sdk::elgamal_decrypt;
 use seal_sdk::genkey;
 use seal_sdk::types::FetchKeyRequest;
 use seal_sdk::types::FetchKeyResponse;
+use seal_sdk::Certificate;
 use seal_sdk::IBEPublicKey;
 use seal_sdk::IBEUserSecretKeys;
 use seal_sdk::{seal_decrypt, EncryptedObject, IBEPublicKeys};
@@ -39,7 +40,6 @@ use sui_sdk_types::PersonalMessage;
 use sui_sdk_types::ProgrammableTransaction;
 use sui_sdk_types::TypeTag;
 use tracing::info;
-use seal_sdk::Certificate;
 /// Init parameter load endpoint - Step 1 of Seal key retrieval
 /// This endpoint is called by the host to get the request body for fetching keys
 pub async fn init_parameter_load(
@@ -96,9 +96,8 @@ pub async fn init_parameter_load(
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
 
-    let package_id = ObjectID::from_str(&request.package_id).map_err(|e| {
-        EnclaveError::GenericError(format!("Invalid package ID in request: {}", e))
-    })?;
+    let package_id = ObjectID::from_str(&request.package_id)
+        .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in request: {}", e)))?;
     println!("certificate.user: {:?}", certificate.user);
     let ptb = create_ptb(
         package_id,
@@ -147,19 +146,19 @@ pub async fn complete_parameter_load(
         EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
     })?;
 
-    let services = encrypted_object.services.iter().map(|service| {
-        ObjectID::new(service.0.clone().try_into().unwrap())
-    }).collect::<Vec<_>>();
-
     let mut all_keys = HashMap::new();
-    seal_responses.into_iter().zip(services).for_each(|(response, service)| {
-        let object_id = ObjectID::new(service.clone().try_into().unwrap());
-        // todo: handle array
-        let user_secret_key =
-            elgamal_decrypt(&enc_secret, &response.decryption_keys[0].encrypted_key);
-        // todo: verify secret key
-        all_keys.insert(object_id, user_secret_key);
-    });
+    println!("Number of services: {}", encrypted_object.services.len());
+    println!("Number of responses: {}", seal_responses.len());
+  
+    for (i, (response, (service_id, index))) in seal_responses.iter().zip(&encrypted_object.services).enumerate() {
+        println!("Response {}: service_id={:?}, index={}", i, service_id, index);
+        let user_secret_key = elgamal_decrypt(&enc_secret, &response.decryption_keys[0].encrypted_key);
+        println!("Decrypted USK {}: {:?}", i, user_secret_key);
+        all_keys.insert(*service_id, user_secret_key);
+    }
+  
+    println!("Package ID: {:?}", encrypted_object.package_id);
+    println!("Inner ID: {:?}", encrypted_object.id);
 
     let user_secret_keys = IBEUserSecretKeys::BonehFranklinBLS12381(all_keys);
 
@@ -209,9 +208,15 @@ async fn create_ptb(
 
     println!("sig: {:?}", Hex::encode(sig.as_bytes()));
     println!("eph pk: {:?}", Hex::encode(eph_kp.public().as_bytes()));
-    println!("wallet address: {:?}", Hex::encode(wallet_address.as_bytes()));
+    println!(
+        "wallet address: {:?}",
+        Hex::encode(wallet_address.as_bytes())
+    );
     println!("signing_payload: {:?}", Hex::encode(signing_payload));
-    println!("old_signing_payload: {:?}", Hex::encode(old_signing_payload));
+    println!(
+        "old_signing_payload: {:?}",
+        Hex::encode(old_signing_payload)
+    );
     // Create inputs
     let inputs = vec![
         // Input 0: id arg
