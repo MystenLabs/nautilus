@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Check if both arguments are provided
+if [ "$#" -ne 6 ]; then
+    echo "Usage: $0 <enclave_package_id> <examples_package_id> <enclave_config_id> <enclave_url> <module_name> <otw_name>"
+    echo "Example: $0 0x872852f77545c86a8bd9bdb8adc9e686b8573fc2a0dab0af44864bc1aecdaea9 0x2b70e34684d696a0a2847c793ee1e5b88a23289a7c04dd46249b95a9823367d9 0x86775ced1fdceae31d090cf48a11b4d8e4a613a2d49f657610c0bc287c8f0589 http://100.26.111.45:3000"
+    exit 1
+fi
+
+ENCLAVE_PACKAGE_ID=$1
+EXAMPLES_PACKAGE_ID=$2
+ENCLAVE_CONFIG_OBJECT_ID=$3
+ENCLAVE_URL=$4
+MODULE_NAME=$5
+OTW_NAME=$6
+
+echo 'fetching attestation'
+# Fetch attestation and store the hex
+ATTESTATION_HEX=$(curl -s $ENCLAVE_URL/get_attestation | jq -r '.attestation')
+
+echo "got attestation, length=${#ATTESTATION_HEX}"
+
+if [ ${#ATTESTATION_HEX} -eq 0 ]; then
+    echo "Error: Attestation is empty. Please check status of $ENCLAVE_URL and its get_attestation endpoint."
+    exit 1
+fi
+
+# Convert hex to array using Python
+ATTESTATION_ARRAY=$(python3 - <<EOF
+import sys
+
+def hex_to_vector(hex_string):
+    byte_values = [str(int(hex_string[i:i+2], 16)) for i in range(0, len(hex_string), 2)]
+    rust_array = [f"{byte}u8" for byte in byte_values]
+    return f"[{', '.join(rust_array)}]"
+
+print(hex_to_vector("$ATTESTATION_HEX"))
+EOF
+)
+
+echo 'converted attestation'
+# Execute sui client command with the converted array and provided arguments
+sui client ptb --assign v "vector$ATTESTATION_ARRAY" \
+    --move-call "0x2::nitro_attestation::load_nitro_attestation" v @0x6 \
+    --assign result \
+    --move-call "${ENCLAVE_PACKAGE_ID}::enclave::register_enclave<${EXAMPLES_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" @${ENCLAVE_CONFIG_OBJECT_ID} result \
+    --gas-budget 100000000
