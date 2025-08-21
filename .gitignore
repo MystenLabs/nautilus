@@ -10,3 +10,4 @@ secrets-policy.json
 
 /out
 /target
+/src/seal-cli/target
