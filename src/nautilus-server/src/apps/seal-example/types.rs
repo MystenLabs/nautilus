@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SealConfig {
     pub key_servers: Vec<String>,
-    pub public_keys: Vec<String>,
-    pub threshold: u8,
-    pub rpc_url: String,
+    pub public_keys: Vec<String>
 }
 
 pub struct ParsedResponse {
@@ -33,9 +31,4 @@ pub struct InitParameterLoadResponse {
 pub struct CompleteParameterLoadRequest {
     pub encrypted_object: String,
     pub seal_responses: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CompleteParameterLoadResponse {
-    pub response: String,
 }

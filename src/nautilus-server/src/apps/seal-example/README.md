@@ -97,7 +97,7 @@ entry fun seal_approve<T: drop>(
 }
 ```
 
-This function ensures the signature is verified against the enclave public key. The transaction sender matches the enclave's wallet address. The `id` can be anything. 
+This function ensures the signature is verified against the enclave public key. The transaction sender matches the enclave's wallet address. The `id` can be anything that identifies the key identity, e.g. `weather-api-key` in bytes. . 
 
 ## Using the seal-example weather service:
 

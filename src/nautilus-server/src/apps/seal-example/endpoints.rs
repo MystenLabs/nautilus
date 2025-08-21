@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::types::*;
-use crate::apps::seal_example::{ENC_SECRET, SEAL_API_KEY, SEAL_CONFIG, SEAL_WALLET};
+use crate::apps::seal_example::{ENCRYPTION_SECRET_KEY, SEAL_API_KEY, SEAL_CONFIG, ENCLAVE_WALLET};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
@@ -22,8 +22,8 @@ use seal_sdk::types::FetchKeyResponse;
 use seal_sdk::Certificate;
 use seal_sdk::IBEPublicKey;
 use seal_sdk::IBEUserSecretKeys;
+use seal_sdk::{ibe_verify_user_secret_key, signed_message, signed_request};
 use seal_sdk::{seal_decrypt, EncryptedObject, IBEPublicKeys};
-use seal_sdk::{signed_message, signed_request, ibe_verify_user_secret_key};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -39,34 +39,30 @@ use sui_sdk_types::ObjectId as ObjectID;
 use sui_sdk_types::PersonalMessage;
 use sui_sdk_types::ProgrammableTransaction;
 use sui_sdk_types::TypeTag;
-use tracing::info;
-/// Init parameter load endpoint - Step 1 of Seal key retrieval
-/// This endpoint is called by the host to get the request body for fetching keys
+
+/// Step 1: This endpoint takes enclave obj id with initial shared version,
+/// key name and package id where seal_approve is defined.
+/// Returns a FetchKeyRequest that contains the certificate and desired ptb.
 pub async fn init_parameter_load(
     State(state): State<Arc<AppState>>,
     Json(request): Json<InitParameterLoadRequest>,
 ) -> Result<Json<InitParameterLoadResponse>, EnclaveError> {
-    // Generate a unique session ID
-    let session_id = uuid::Uuid::new_v4().to_string();
-    info!("Initializing parameter load for session: {}", session_id);
+    if SEAL_API_KEY.read().await.is_some() {
+        return Err(EnclaveError::GenericError(
+            "API key already set".to_string(),
+        ));
+    }
 
-    let wallet_guard = SEAL_WALLET.read().await;
-    let wallet_address = wallet_guard.public_key().to_address();
-
-    // Parse package ID from config
+    // Parse enclave object id and package id. 
+    let enclave_object_id = ObjectID::from_str(&request.enclave_object_id).map_err(|e| {
+        EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
+    })?;
     let package_id = ObjectID::from_str(&request.package_id)
         .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
 
-    let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
-
-    // Store encryption secret key in lazy static cache
-    {
-        let mut enc_secret_guard = (*ENC_SECRET).write().await;
-        *enc_secret_guard = Some(enc_secret);
-    }
+    // Generate session and create certificate.
     let session = Ed25519KeyPair::generate(&mut thread_rng());
-
-    // Create certificate
+    let session_vk = session.public();
     let creation_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Time error: {}", e)))?
@@ -74,31 +70,31 @@ pub async fn init_parameter_load(
     let ttl_min = 10;
     let message = signed_message(
         package_id.to_string(),
-        session.public(),
+        session_vk,
         creation_time,
         ttl_min,
     );
 
+    // Sign personal message from enclave wallet. 
+    let wallet_guard = ENCLAVE_WALLET.read().await;
+    let wallet_address = wallet_guard.public_key().to_address();
     let signature = wallet_guard
         .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to sign personal message: {}", e)))?;
+        .map_err(|e| {
+            EnclaveError::GenericError(format!("Failed to sign personal message: {}", e))
+        })?;
 
+    // Create certificate with enclave wallet and session vk. 
     let certificate = Certificate {
         user: wallet_address,
-        session_vk: session.public().clone(),
+        session_vk: session_vk.clone(),
         creation_time,
         ttl_min,
         signature,
         mvr_name: None,
     };
 
-    let enclave_object_id = ObjectID::from_str(&request.enclave_object_id).map_err(|e| {
-        EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
-    })?;
-
-    let package_id = ObjectID::from_str(&request.package_id)
-        .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in request: {}", e)))?;
-    println!("certificate.user: {:?}", certificate.user);
+    // Create PTB for seal_approve of package. 
     let ptb = create_ptb(
         package_id,
         enclave_object_id,
@@ -109,9 +105,17 @@ pub async fn init_parameter_load(
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
+
+    // Generate ephemeral encryption key and store temporarily.
+    let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
+    {
+        let mut enc_secret_guard = (*ENCRYPTION_SECRET_KEY).write().await;
+        *enc_secret_guard = Some(enc_secret);
+    }
+
+    // Create FetchKeyRequest. 
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
     let request_signature = session.sign(&request_message);
-
     let request = FetchKeyRequest {
         ptb: Base64::encode(bcs::to_bytes(&ptb).expect("should not fail")),
         enc_key,
@@ -125,31 +129,36 @@ pub async fn init_parameter_load(
     }))
 }
 
-/// Complete parameter load endpoint - Step 2 of Seal key retrieval
-/// This endpoint is called by the host with the encrypted object and seal responses
+/// Step 3: Complete parameter load. This endpoint accepts the encrypted 
+/// object and encoded seal responses, which is from after the seal response 
+/// are fetched by the host using cli. Initialize SEAL_API if decryption is 
+/// successful and returns OK
 pub async fn complete_parameter_load(
     State(_state): State<Arc<AppState>>,
     Json(request): Json<CompleteParameterLoadRequest>,
-) -> Result<Json<CompleteParameterLoadResponse>, EnclaveError> {
+) -> Result<Json<()>, EnclaveError> {
+    if SEAL_API_KEY.read().await.is_some() {
+        return Err(EnclaveError::GenericError(
+            "API key already set".to_string(),
+        ));
+    }
+
+    // Parse encrypted object.
     let encrypted_object: EncryptedObject = bcs::from_bytes(
         &Hex::decode(&request.encrypted_object)
             .map_err(|e| EnclaveError::GenericError(format!("Invalid hex encoding: {}", e)))?,
-    ).map_err(|e| EnclaveError::GenericError(format!("Failed to parse encrypted object: {}", e)))?;
+    )
+    .map_err(|e| EnclaveError::GenericError(format!("Failed to parse encrypted object: {}", e)))?;
+
+    // Parse seal responses.
     let seal_responses: Vec<FetchKeyResponse> = bcs::from_bytes(
         &Hex::decode(&request.seal_responses)
             .map_err(|e| EnclaveError::GenericError(format!("Invalid hex encoding: {}", e)))?,
     )
     .map_err(|e| EnclaveError::GenericError(format!("Failed to parse seal responses: {}", e)))?;
 
-    let enc_secret_guard = (*ENC_SECRET).read().await;
-    let enc_secret = enc_secret_guard.as_ref().ok_or_else(|| {
-        EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
-    })?;
-
-    let mut all_keys = HashMap::new();
-
-    let config = &*SEAL_CONFIG;
-    let pks: Vec<IBEPublicKey> = config
+    // Parse public keys from config. 
+    let pks: Vec<IBEPublicKey> = SEAL_CONFIG
         .public_keys
         .iter()
         .map(
@@ -165,34 +174,45 @@ pub async fn complete_parameter_load(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| EnclaveError::GenericError(format!("Failed to parse public keys: {}", e)))?;
 
+    // Load encryption secret key from temp storage.
+    let enc_secret_guard = (*ENCRYPTION_SECRET_KEY).read().await;
+    let enc_secret = enc_secret_guard.as_ref().ok_or_else(|| {
+        EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
+    })?;
+
+    // Decrypt each key using encryption secret key and verify them using id.
+    // todo: handle multiple keys.
+    let mut all_keys = HashMap::new();
     for (i, seal_response) in seal_responses.iter().enumerate() {
         let service_id = encrypted_object.services[i].0;
         let public_key = pks[i];
-        let user_secret_key = elgamal_decrypt(&enc_secret, &seal_response.decryption_keys[0].encrypted_key);
-        println!("Decrypted USK {}: {:?}", i, user_secret_key);
+        let user_secret_key =
+            elgamal_decrypt(enc_secret, &seal_response.decryption_keys[0].encrypted_key);
         ibe_verify_user_secret_key(
             &user_secret_key,
             &seal_response.decryption_keys[0].id,
-            &public_key
-        ).map_err(|e| EnclaveError::GenericError(format!("Failed to verify user secret key: {}", e)))?;
+            &public_key,
+        )
+        .map_err(|e| {
+            EnclaveError::GenericError(format!("Failed to verify user secret key: {}", e))
+        })?;
         all_keys.insert(service_id, user_secret_key);
     }
 
-    let user_secret_keys = IBEUserSecretKeys::BonehFranklinBLS12381(all_keys);
-
-    let public_keys = IBEPublicKeys::BonehFranklinBLS12381(pks);
-
-    let secret = seal_decrypt(&encrypted_object, &user_secret_keys, Some(&public_keys))
+    // Decrypt the encrypted object using the user secret keys.
+    let secret = seal_decrypt(&encrypted_object, &IBEUserSecretKeys::BonehFranklinBLS12381(all_keys), Some(&IBEPublicKeys::BonehFranklinBLS12381(pks)))
         .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt: {}", e)))?;
-    let secret_str = String::from_utf8(secret.clone()).unwrap();
-    println!("secret: {}", secret_str);
+    // todo: un-assume its a string
+    let secret_str = String::from_utf8(secret.clone()).expect("should not fail");
+
+    // Initialize SEAL_API_KEY.
     let mut api_key_guard = (*SEAL_API_KEY).write().await;
     *api_key_guard = Some(secret_str);
-    Ok(Json(CompleteParameterLoadResponse {
-        response: Hex::encode(&secret),
-    }))
+
+    Ok(Json(()))
 }
 
+/// Create a PTB with key id, the enclave shared object and the signature.
 async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
@@ -201,25 +221,9 @@ async fn create_ptb(
     key_name: String,
     eph_kp: &Ed25519KeyPair,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
-    println!("package_id: {:?}", package_id);
-    println!("enclave_object_id: {:?}", enclave_object_id);
+    // eph_kp signs over ENCLAVE_WALLET address.
+    let sig: Ed25519Signature = eph_kp.sign(wallet_address.as_bytes());
 
-    let old_signing_payload = bcs::to_bytes(&wallet_address).expect("should not fail");
-    let signing_payload = wallet_address.as_bytes();
-    let sig: Ed25519Signature = eph_kp.sign(&signing_payload);
-
-    println!("sig: {:?}", Hex::encode(sig.as_bytes()));
-    println!("eph pk: {:?}", Hex::encode(eph_kp.public().as_bytes()));
-    println!(
-        "wallet address: {:?}",
-        Hex::encode(wallet_address.as_bytes())
-    );
-    println!("signing_payload: {:?}", Hex::encode(signing_payload));
-    println!(
-        "old_signing_payload: {:?}",
-        Hex::encode(old_signing_payload)
-    );
-    // Create inputs
     let inputs = vec![
         // Input 0: id arg
         Input::Pure {
@@ -227,13 +231,13 @@ async fn create_ptb(
         },
         // Input 1: enclave arg (shared object)
         Input::Shared {
-            object_id: enclave_object_id, // ObjectID is an alias for Address
+            object_id: enclave_object_id,
             initial_shared_version,
             mutable: false,
         },
         // Input 2: signature arg
         Input::Pure {
-            value: bcs::to_bytes(&sig.as_bytes().to_vec())?,
+            value: bcs::to_bytes(&sig.as_bytes())?,
         },
     ];
 
@@ -246,14 +250,9 @@ async fn create_ptb(
             "{}::weather::WEATHER",
             package_id
         ))?],
-        arguments: vec![
-            Argument::Input(0), // id arg
-            Argument::Input(1), // enclave arg
-            Argument::Input(2), // signature arg
-        ],
+        arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
     };
 
-    // Create the ProgrammableTransaction
     let ptb = ProgrammableTransaction {
         inputs,
         commands: vec![Command::MoveCall(move_call)],

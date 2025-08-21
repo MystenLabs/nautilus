@@ -22,17 +22,16 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 lazy_static::lazy_static! {
-    pub static ref SEAL_WALLET: Arc<RwLock<Ed25519PrivateKey>> = {
-        let ed25519_sk = Ed25519PrivateKey::generate(&mut rand::thread_rng());
+    pub static ref ENCLAVE_WALLET: Arc<RwLock<Ed25519PrivateKey>> = {
+        let ed25519_sk = Ed25519PrivateKey::generate(rand::thread_rng());
         Arc::new(RwLock::new(ed25519_sk))
     };
     pub static ref SEAL_CONFIG: SealConfig = {
         let config_str = include_str!("seal_config.yaml");
-        println!("config_str: {}", config_str);
         serde_yaml::from_str(config_str)
             .expect("Failed to parse seal_config.yaml")
     };
-    pub static ref ENC_SECRET: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
+    pub static ref ENCRYPTION_SECRET_KEY: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
     pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
 }
 
