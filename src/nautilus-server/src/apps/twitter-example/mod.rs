@@ -16,7 +16,6 @@ use tracing::info;
 /// Core Nautilus server logic, replace it with your own
 /// relavant structs and process_data endpoint.
 /// ====
-
 /// Inner type for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserData {
