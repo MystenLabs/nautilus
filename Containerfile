@@ -25,7 +25,7 @@ FROM stagex/user-linux-nitro@sha256:655924404a008c6c70c3411e7b32d6558ac388bcc3a5
 FROM stagex/user-cpio@sha256:05701450a186fa1cb5a8287f7fa4d216e610a15d22c2e3e86d70ac3550d9cd3c AS user-cpio
 FROM stagex/user-socat@sha256:e2afa58a4291db21191ad3e42318494f7956228715e9b8490c681933d8812df7 AS user-socat
 FROM stagex/user-jq@sha256:e6412c6817c7830b18e0a05389eff7f9c648f4e200238c0b8f61067a2dab36fd AS user-jq
-FROM stagex/user-nit:local AS user-nit
+FROM stagex/user-nit@sha256:60b6eef4534ea6ea78d9f29e4c7feb27407b615424f20ad8943d807191688be7 AS user-nit
 
 FROM scratch AS base
 COPY --from=core-busybox . /
