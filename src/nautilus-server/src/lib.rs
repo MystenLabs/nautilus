@@ -1,10 +1,10 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
+use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use serde_json::json;
 
