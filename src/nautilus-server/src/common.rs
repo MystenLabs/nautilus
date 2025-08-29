@@ -38,6 +38,8 @@ pub struct IntentMessage<T: Serialize> {
 #[repr(u8)]
 pub enum IntentScope {
     ProcessData = 0,
+    #[cfg(feature = "gcp-verify-example")]
+    JwtVerification = 1,
 }
 
 impl<T: Serialize + Debug> IntentMessage<T> {
