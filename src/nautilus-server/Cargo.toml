@@ -27,7 +27,10 @@ nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev 
 bcs = "0.1.6"
 
 regex = { version = "1.5", optional = true }
+base64 = { version = "0.22", optional = true }
+jsonwebtoken = { version = "9", optional = true }
 
 [features]
 weather-example = []
 twitter-example = ["regex"]
+gcp-verify-example = ["base64","jsonwebtoken"]

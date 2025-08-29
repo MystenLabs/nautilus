@@ -1,3 +1,0 @@
-# External endpoints that the enclave is allowed to access.
-endpoints:
-  - www.googleapis.com # For fetching JWKS from Google

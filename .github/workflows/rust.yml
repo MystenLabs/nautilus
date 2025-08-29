@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-ghcloud]
-        feature: [weather-example, twitter-example]
+        feature: [weather-example, twitter-example, gcp-verify-example]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-ghcloud
     strategy:
       matrix:
-        feature: [weather-example, twitter-example]
+        feature: [weather-example, twitter-example, gcp-verify-example]
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
@@ -86,7 +86,7 @@ jobs:
       - name: rustfmt
         working-directory: src/nautilus-server
         run: cargo fmt --all -- --check
-  
+
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
     runs-on: ubuntu-latest
