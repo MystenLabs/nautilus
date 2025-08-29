@@ -35,8 +35,8 @@ async fn main() -> Result<()> {
             let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
             // let api_key = "045a27812dbe456392913223221306".to_string();
 
-            Arc::new(AppState { 
-                eph_kp, 
+            Arc::new(AppState {
+                eph_kp,
                 api_key,
                 #[cfg(feature = "gcp-verify-example")]
                 jwks_cache: None,

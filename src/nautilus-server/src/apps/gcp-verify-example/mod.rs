@@ -55,9 +55,9 @@ struct JwksKeyResponse {
 #[cfg(feature = "gcp-verify-example")]
 pub async fn update_jwks_cache(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let url = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
-    
+
     info!("Fetching JWKS from Google...");
-    
+
     let response = reqwest::get(url).await.map_err(|e| {
         error!("Failed to fetch JWKS: {}", e);
         EnclaveError::GenericError(format!("Failed to fetch JWKS: {}", e))
@@ -99,8 +99,11 @@ pub async fn update_jwks_cache(state: Arc<AppState>) -> Result<(), EnclaveError>
     if let Some(jwks_cache) = &state.jwks_cache {
         let mut cache = jwks_cache.write().await;
         *cache = (keys_map, timestamp);
-        
-        info!("JWKS cache updated successfully with {} keys", cache.0.len());
+
+        info!(
+            "JWKS cache updated successfully with {} keys",
+            cache.0.len()
+        );
     }
     Ok(())
 }
@@ -109,7 +112,7 @@ pub async fn update_jwks_cache(state: Arc<AppState>) -> Result<(), EnclaveError>
 pub fn start_jwks_refresh_task(state: Arc<AppState>) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // 5 minutes
-        
+
         loop {
             interval.tick().await;
             if let Err(e) = update_jwks_cache(state.clone()).await {
@@ -127,7 +130,7 @@ async fn should_refresh_cache(state: &Arc<AppState>) -> bool {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        
+
         current_time - cache.1 > 300 // 5 minutes
     } else {
         false
@@ -163,7 +166,7 @@ pub async fn process_data(
                     claims: None,
                     error: Some(format!("Failed to decode JWT header: {}", e)),
                 };
-                
+
                 return Ok(Json(to_signed_response(
                     &state.eph_kp,
                     verification_data,
@@ -182,7 +185,7 @@ pub async fn process_data(
                     claims: None,
                     error: Some("JWT header missing 'kid' field".to_string()),
                 };
-                
+
                 return Ok(Json(to_signed_response(
                     &state.eph_kp,
                     verification_data,
@@ -203,7 +206,7 @@ pub async fn process_data(
                         claims: None,
                         error: Some(format!("Key with kid '{}' not found in JWKS", kid)),
                     };
-                    
+
                     return Ok(Json(to_signed_response(
                         &state.eph_kp,
                         verification_data,
@@ -222,7 +225,7 @@ pub async fn process_data(
                         claims: None,
                         error: Some(format!("Failed to create decoding key: {:?}", e)),
                     };
-                    
+
                     return Ok(Json(to_signed_response(
                         &state.eph_kp,
                         verification_data,
@@ -245,7 +248,7 @@ pub async fn process_data(
                         claims: Some(token_data.claims),
                         error: None,
                     };
-                    
+
                     Ok(Json(to_signed_response(
                         &state.eph_kp,
                         verification_data,
@@ -261,7 +264,7 @@ pub async fn process_data(
                         claims: None,
                         error: Some(format!("JWT verification failed: {}", e)),
                     };
-                    
+
                     Ok(Json(to_signed_response(
                         &state.eph_kp,
                         verification_data,
@@ -277,7 +280,7 @@ pub async fn process_data(
                 claims: None,
                 error: Some("JWKS cache not available".to_string()),
             };
-            
+
             Ok(Json(to_signed_response(
                 &state.eph_kp,
                 verification_data,
@@ -294,7 +297,7 @@ pub async fn process_data(
             claims: None,
             error: Some("GCP verify example not enabled".to_string()),
         };
-        
+
         Ok(Json(to_signed_response(
             &state.eph_kp,
             verification_data,
@@ -307,7 +310,7 @@ pub async fn process_data(
 #[cfg(feature = "gcp-verify-example")]
 fn create_decoding_key(jwks_key: &crate::JwksKey) -> Result<DecodingKey, EnclaveError> {
     use base64::{engine::general_purpose, Engine as _};
-    
+
     if jwks_key.kty != "RSA" {
         return Err(EnclaveError::GenericError(
             "Only RSA keys are supported".to_string(),
@@ -318,7 +321,7 @@ fn create_decoding_key(jwks_key: &crate::JwksKey) -> Result<DecodingKey, Enclave
     let _n_bytes = general_purpose::URL_SAFE_NO_PAD
         .decode(&jwks_key.n)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to decode n: {}", e)))?;
-    
+
     let _e_bytes = general_purpose::URL_SAFE_NO_PAD
         .decode(&jwks_key.e)
         .map_err(|e| EnclaveError::GenericError(format!("Failed to decode e: {}", e)))?;
@@ -363,6 +366,10 @@ mod tests {
         };
 
         let result = create_decoding_key(&mock_jwks_key);
-        assert!(result.is_ok(), "Failed to create decoding key: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to create decoding key: {:?}",
+            result.err()
+        );
     }
 }
