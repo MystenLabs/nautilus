@@ -57,6 +57,7 @@ pub async fn init_parameter_load(
     let enclave_object_id = ObjectID::from_str(&request.enclave_object_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
+    // todo: move this to config
     let package_id = ObjectID::from_str(&request.package_id)
         .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
 

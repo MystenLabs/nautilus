@@ -587,7 +587,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.5.9"
-source = "git+https://github.com/MystenLabs/seal?rev=9109fd67c783184b510fd4b1c8d8867d42be48a1#9109fd67c783184b510fd4b1c8d8867d42be48a1"
+source = "git+https://github.com/MystenLabs/seal?rev=b08a6b4b2415997845b597ccf0ec354876894994#b08a6b4b2415997845b597ccf0ec354876894994"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -2348,7 +2348,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "seal-sdk"
 version = "0.5.9"
-source = "git+https://github.com/MystenLabs/seal?rev=9109fd67c783184b510fd4b1c8d8867d42be48a1#9109fd67c783184b510fd4b1c8d8867d42be48a1"
+source = "git+https://github.com/MystenLabs/seal?rev=b08a6b4b2415997845b597ccf0ec354876894994#b08a6b4b2415997845b597ccf0ec354876894994"
 dependencies = [
  "bcs",
  "chrono",

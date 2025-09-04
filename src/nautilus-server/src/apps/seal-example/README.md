@@ -45,7 +45,7 @@ Phase 1: Registration (No Secrets Needed)
 
 Phase 2: Secret Loading (Using Registered Enclave)
 ├── 1. Host calls /init_parameter_load with the Enclave Object
-├── 2. Enclave creates PTB for seal_approve using its ID
+├── 2. Enclave creates a signed Seal request using its ID
 ├── 3. Host fetches encrypted keys from Seal servers
 ├── 4. Host calls /complete_parameter_load to deliver encrypted secrets
 └── 5. Enclave decrypts and loads secrets → Now fully functional
@@ -53,7 +53,7 @@ Phase 2: Secret Loading (Using Registered Enclave)
 
 ### Why Two-Phase Bootstrap?
 
-The two-phase bootstrap is needed because enclaves operate without direct internet access and cannot fetch secrets from Seal key servers URL themselves. As a workaround, the host acts as an intermediary to retrieve encrypted secrets from Seal servers. This delegation is secure because the fetched responses are encrypted using the enclave's ephemeral public key, and only the enclave possesses the corresponding private key for decryption. Additionally, the enclave is booted with hardcoded public keys of the Seal servers, so it can verify the authenticity of the responses passed from host, so the host cannot tamper with or forge server responses.
+The two-phase bootstrap is needed because enclaves operate without direct internet access and cannot fetch secrets from Seal key servers URL themselves. As a workaround, the host acts as an intermediary to retrieve encrypted secrets from Seal servers. This delegation is secure because the fetched responses are encrypted using the enclave's ephemeral public key, and only the enclave possesses the corresponding private key for decryption. Additionally, the enclave is booted with hardcoded public keys of the Seal servers it depends on, so it can verify the authenticity of the responses passed from host, so the host cannot tamper with or forge server responses.
 
 ## Security Guarantees
 
