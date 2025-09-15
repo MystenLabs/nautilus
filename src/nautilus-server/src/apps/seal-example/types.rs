@@ -15,8 +15,8 @@ pub struct SealConfig {
 pub struct InitParameterLoadRequest {
     pub enclave_object_id: String,
     pub initial_shared_version: u64,
-    pub package_id: String,
     pub key_name: String, // e.g. "weather-api-key"
+    pub package_id: String,
 }
 
 /// Response for /init_parameter_load

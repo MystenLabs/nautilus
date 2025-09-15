@@ -122,19 +122,23 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 ### Step 1: Encrypt Secret (One-time Setup)
 
 ```bash
-cd src/seal-cli
-cargo run encrypt "045a27812dbe456392913223221306" -p 0xfaeabd7f317dd7ae40d83b73cfa68b92795f48540d03f1232b33207e22d0a62f -n weather_api_key -t 2 -c seal_config.yaml
-# Output: Encrypted object (BCS hex)
+cargo run --bin seal-cli encrypt --secret 045a27812dbe456392913223221306 \
+    --id 0000 \
+    -p 0xfaeabd7f317dd7ae40d83b73cfa68b92795f48540d03f1232b33207e22d0a62f \
+    -t 2 \
+    -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
+    -n testnet
+
 Encrypted object: 
 <ENCRYPTED_OBJECT>
 ```
 
-This command uses the public keys of the key servers and the identity `key_name` to encrypt the secret. This step can be done anywhere where the secret value is secure. 
+TThe Seal CLI command can be ran in the [Seal repo](https://github.com/MystenLabs/seal). This command looks up the public keys of the specified key servers ID using public fullnode on the given network. Then it uses the identity `id` and threshold `t` to encrypt the secret. This step can be done anywhere where the secret value is secure. The package ID is the package containing the Seal policy. 
 
 ### Step 2: Load the encrypted secret to enclave
 
 ```bash
-curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"package_id": "<ENCLAVE_PACKAGE_ID>", "enclave_object_id": "<YOUR_ENCLAVE_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "key_name": "weather_api_key" }'
+curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"enclave_object_id": "<YOUR_ENCLAVE_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "key_name": "weather_api_key" }'
 
 # Output: {"encoded_request": "<ENCODED_REQUEST>"}
 ```
@@ -149,19 +153,20 @@ This step is done in the host that can communicate to the enclave via 3001.
 ### Step 3: Fetch Keys from Seal Servers
 
 ```bash
-cd src/seal-cli
-cargo run fetch-keys <ENCODED_REQUEST> -c seal_config.yaml -t 2 -r https://fullnode.testnet.sui.io:443
+cargo run --bin seal-cli fetch-keys --request <ENCODED_REQUEST> \
+    -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
+    -t 2 \
+    -n testnet
 
-# Output: Seal responses
-...
-Seal responses: "<SEAL_RESPONSES>"
+Encoded seal responses:
+<ENCODED_SEAL_RESPONSES>
 ```
 
-This can be done any with Internet connection. 
+TThe Seal CLI command can be ran in the [Seal repo](https://github.com/MystenLabs/seal). This command parses the hex BCS encoded `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. This can be done any with Internet connection. 
 
 **What happens**:
 - CLI contacts multiple Seal servers using the fetch key request. 
-- Each server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if valid. 
+- Each server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the seal policy is satifies. 
 - CLI collects all Seal server responses till threshold is reached. 
 
 ### Step 4: Complete Secret Loading
@@ -191,6 +196,6 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 {"response":{"intent":0,"timestamp_ms":1755805500000,"data":{"location":"San Francisco","temperature":18}},"signature":"4587c11eafe8e78c766c745c9f89b3bb7fd1a914d6381921e8d7d9822ddc9556966932df1c037e23bedc21f369f6edc66c1b8af019778eb6b1ec1ee7f324e801"}
 ```
 
-## todo
+## Handle Multiple Secrets
 
-- Handles multiple secret
+Repeat step 1 with different `id` values for different secrets.
