@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct SealConfig {
     pub key_servers: Vec<String>,
     pub public_keys: Vec<String>,
+    pub package_id: String,
 }
 
 /// Request for /init_parameter_load
@@ -15,8 +16,7 @@ pub struct SealConfig {
 pub struct InitParameterLoadRequest {
     pub enclave_object_id: String,
     pub initial_shared_version: u64,
-    pub key_name: String, // e.g. "weather-api-key"
-    pub package_id: String,
+    pub id: String, // identity for seal encryption
 }
 
 /// Response for /init_parameter_load

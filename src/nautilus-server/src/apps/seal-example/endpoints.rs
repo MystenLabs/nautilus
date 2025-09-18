@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::types::*;
-use crate::apps::seal_example::{ENCLAVE_WALLET, ENCRYPTION_SECRET_KEY, SEAL_API_KEY, SEAL_CONFIG};
+use crate::apps::seal_example::{ENCRYPTION_SECRET_KEY, SEAL_API_KEY, SEAL_CONFIG};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::ed25519::Ed25519Signature;
 use fastcrypto::encoding::Hex;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::serde_helpers::ToFromByteArray;
-use fastcrypto::traits::ToFromBytes;
 use fastcrypto::traits::{KeyPair, Signer};
 use rand::thread_rng;
 use seal_sdk::elgamal_decrypt;
@@ -28,8 +26,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sui_crypto::SuiSigner;
-use sui_sdk_types::Address;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
 use sui_sdk_types::Identifier;
@@ -39,7 +35,6 @@ use sui_sdk_types::ObjectId as ObjectID;
 use sui_sdk_types::PersonalMessage;
 use sui_sdk_types::ProgrammableTransaction;
 use sui_sdk_types::TypeTag;
-
 /// Step 1: This endpoint takes enclave obj id with initial shared version,
 /// key name and package id where seal_approve is defined.
 /// Returns a FetchKeyRequest that contains the certificate and desired ptb.
@@ -57,7 +52,8 @@ pub async fn init_parameter_load(
     let enclave_object_id = ObjectID::from_str(&request.enclave_object_id).map_err(|e| {
         EnclaveError::GenericError(format!("Invalid enclave object ID in request: {}", e))
     })?;
-    let package_id = state.package_id;
+    let package_id = ObjectID::from_str(&SEAL_CONFIG.package_id)
+        .map_err(|e| EnclaveError::GenericError(format!("Invalid package ID in config: {}", e)))?;
     // Generate session and create certificate.
     let session = Ed25519KeyPair::generate(&mut thread_rng());
     let session_vk = session.public();
@@ -68,14 +64,31 @@ pub async fn init_parameter_load(
     let ttl_min = 10;
     let message = signed_message(package_id.to_string(), session_vk, creation_time, ttl_min);
 
-    // Sign personal message from enclave wallet.
-    let wallet_guard = ENCLAVE_WALLET.read().await;
-    let wallet_address = wallet_guard.public_key().to_address();
-    let signature = wallet_guard
-        .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
-        .map_err(|e| {
-            EnclaveError::GenericError(format!("Failed to sign personal message: {}", e))
-        })?;
+    // Convert fastcrypto keypair to sui-crypto for signing
+    let sui_private_key = {
+        let priv_key_bytes = state.eph_kp.as_ref();
+        let key_bytes: [u8; 32] = priv_key_bytes
+            .try_into()
+            .map_err(|_| EnclaveError::GenericError("Invalid private key length".to_string()))?;
+        sui_crypto::ed25519::Ed25519PrivateKey::new(key_bytes)
+    };
+
+    // Get wallet address from the sui private key
+    let wallet_address = sui_private_key.public_key().to_address();
+
+    let pk = state.eph_kp.public();
+    println!("enclave_pk: {}", Hex::encode(pk.as_ref()));
+    println!("wallet_address: {}", wallet_address);
+
+    // Sign personal message
+    let signature = {
+        use sui_crypto::SuiSigner;
+        sui_private_key
+            .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
+            .map_err(|e| {
+                EnclaveError::GenericError(format!("Failed to sign personal message: {}", e))
+            })?
+    };
 
     // Create certificate with enclave wallet and session vk.
     let certificate = Certificate {
@@ -92,20 +105,16 @@ pub async fn init_parameter_load(
         package_id,
         enclave_object_id,
         request.initial_shared_version,
-        wallet_address,
-        request.key_name,
-        &state.eph_kp,
+        request.id,
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
-
     // Generate ephemeral encryption key and store temporarily.
     let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
     {
         let mut enc_secret_guard = (*ENCRYPTION_SECRET_KEY).write().await;
         *enc_secret_guard = Some(enc_secret);
     }
-
     // Create FetchKeyRequest.
     let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
     let request_signature = session.sign(&request_message);
@@ -199,7 +208,6 @@ pub async fn complete_parameter_load(
         Some(&IBEPublicKeys::BonehFranklinBLS12381(pks)),
     )
     .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt: {}", e)))?;
-    // todo: un-assume its a string
     let secret_str = String::from_utf8(secret.clone()).expect("should not fail");
 
     // Initialize SEAL_API_KEY.
@@ -209,32 +217,23 @@ pub async fn complete_parameter_load(
     Ok(Json(()))
 }
 
-/// Create a PTB with key id, the enclave shared object and the signature.
+/// Create a PTB with key id and the enclave shared object.
 async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
     initial_shared_version: u64,
-    wallet_address: Address,
-    key_name: String,
-    eph_kp: &Ed25519KeyPair,
+    id: String,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
-    // eph_kp signs over ENCLAVE_WALLET address.
-    let sig: Ed25519Signature = eph_kp.sign(wallet_address.as_bytes());
-
     let inputs = vec![
         // Input 0: id arg
         Input::Pure {
-            value: bcs::to_bytes(key_name.as_bytes())?,
+            value: bcs::to_bytes(id.as_bytes())?,
         },
         // Input 1: enclave arg (shared object)
         Input::Shared {
             object_id: enclave_object_id,
             initial_shared_version,
             mutable: false,
-        },
-        // Input 2: signature arg
-        Input::Pure {
-            value: bcs::to_bytes(&sig.as_bytes())?,
         },
     ];
 
@@ -247,7 +246,7 @@ async fn create_ptb(
             "{}::weather::WEATHER",
             package_id
         ))?],
-        arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        arguments: vec![Argument::Input(0), Argument::Input(1)],
     };
 
     let ptb = ProgrammableTransaction {

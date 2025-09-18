@@ -199,3 +199,5 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 ## Handle Multiple Secrets
 
 Repeat step 1 with different `id` values for different secrets.
+
+## Multiple Enclaves
