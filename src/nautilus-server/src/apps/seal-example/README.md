@@ -135,8 +135,8 @@ sui client call --function update_name --module enclave --package $ENCLAVE_PACKA
 sh register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # read from output the created enclave obj id and finds its initial shared version. 
-ENCLAVE_OBJECT_ID=0x959f48f535ad9f7b524ef026567badfc57b85b4490d0bcca95268ea34a1f0a52
-ENCLAVE_OBJ_VERSION=582875391
+ENCLAVE_OBJECT_ID=0x8d11fac3afb9cf78cc337d9e8863841a1ee2836e7f3301650373da0149c38893
+ENCLAVE_OBJ_VERSION=583115725
 ```
 
 Currently, the enclave is running but has no Seal secret and cannot process requests. 

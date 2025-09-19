@@ -35,7 +35,7 @@ use sui_sdk_types::ProgrammableTransaction;
 use sui_sdk_types::TypeTag;
 
 /// Step 1: This endpoint takes enclave obj id with initial shared version,
-/// key name and package id where seal_approve is defined.
+/// a list of key IDs and package id where seal_approve is defined.
 /// Returns a FetchKeyRequest that contains the certificate and desired ptb.
 pub async fn init_parameter_load(
     State(state): State<Arc<AppState>>,
@@ -70,13 +70,6 @@ pub async fn init_parameter_load(
         sui_crypto::ed25519::Ed25519PrivateKey::new(key_bytes)
     };
 
-    // Get wallet address from the sui private key
-    let wallet_address = sui_private_key.public_key().to_address();
-
-    let pk = state.eph_kp.public();
-    println!("enclave_pk: {}", Hex::encode(pk.as_ref()));
-    println!("wallet_address: {}", wallet_address);
-
     // Sign personal message
     let signature = {
         use sui_crypto::SuiSigner;
@@ -89,7 +82,7 @@ pub async fn init_parameter_load(
 
     // Create certificate with enclave ephemeral key wallet and session vk.
     let certificate = Certificate {
-        user: wallet_address,
+        user: sui_private_key.public_key().to_address(),
         session_vk: session_vk.clone(),
         creation_time,
         ttl_min,
@@ -129,9 +122,10 @@ pub async fn init_parameter_load(
 }
 
 /// Step 3: Complete parameter load. This endpoint accepts the encrypted
-/// object and encoded seal responses, which is from after the seal response
-/// are fetched by the host using cli. Initialize SEAL_API if decryption is
-/// successful and returns OK
+/// object and encoded seal responses, which are fetched by the host 
+/// using cli. It fetches keys from each server for all ids included in PTB, 
+/// then decrypts all encrypted objects. Initialize SEAL_API (the first secret) 
+/// if decryption is successful and returns OK.
 pub async fn complete_parameter_load(
     State(_state): State<Arc<AppState>>,
     Json(request): Json<CompleteParameterLoadRequest>,
@@ -142,7 +136,7 @@ pub async fn complete_parameter_load(
         ));
     }
 
-    // service obj id -> pk
+    // BUild a map for service obj id -> pk
     let mut server_pk_map: HashMap<ObjectID, IBEPublicKey> = HashMap::new();
     for (server_id, pk) in SEAL_CONFIG
         .key_servers
@@ -152,7 +146,7 @@ pub async fn complete_parameter_load(
         server_pk_map.insert(*server_id, *pk);
     }
 
-    // Load encryption secret key from temporary storage.
+    // Load the encryption secret key
     let enc_secret_guard = (*ENCRYPTION_SECRET_KEY).read().await;
     let enc_secret = enc_secret_guard.as_ref().ok_or_else(|| {
         EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
@@ -166,7 +160,7 @@ pub async fn complete_parameter_load(
 
     // Process all seal responses and build the key map
     for (server_id, seal_response) in request.seal_responses.iter() {
-        // Get server's pk
+        // Find the server's pk
         let public_key = server_pk_map.get(&server_id).ok_or_else(|| {
             EnclaveError::GenericError(format!("No public key configured for server {}", server_id))
         })?;
@@ -183,7 +177,7 @@ pub async fn complete_parameter_load(
                 },
             )?;
 
-            // build the map from id -> map (server_obj_id -> usk)
+            // Build the map of id -> a map of server_obj_id -> usk
             cached_keys
                 .entry(decryption_key.id.clone())
                 .or_insert_with(HashMap::new)
@@ -191,10 +185,10 @@ pub async fn complete_parameter_load(
         }
     }
 
-    // decrypt each encrypted object
+    // Decrypt each encrypted object
     let mut decrypted_results = Vec::new();
     for encrypted_object in request.encrypted_objects.iter() {
-        // look up keys for the given id of the encrypted object
+        // Look up keys for the given id of the encrypted object
         let keys_for_id = cached_keys.get(&encrypted_object.id).ok_or_else(|| {
             EnclaveError::GenericError(format!(
                 "No keys cached for object {:?}",
@@ -240,12 +234,13 @@ pub async fn complete_parameter_load(
         ));
     }
 
+    // Return the rest of dummy secrets as demo, remove as needed. 
     Ok(Json(CompleteParameterLoadResponse {
         dummy_secrets: decrypted_results[1..].to_vec(),
     }))
 }
 
-/// Create a PTB with multiple key IDs and the enclave shared object.
+/// Create a PTB with multiple commands for the given IDs and the enclave shared object.
 async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
