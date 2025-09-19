@@ -21,7 +21,7 @@ fun pk_to_address(pk: &vector<u8>): vector<u8> {
 
 #[test]
 fun test_pk_to_address() {
-    let eph_pk = x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    let expected_bytes = x"6be28da56fc140d3d55d93a0a4805cab056bdf76eb9c8ef3d9746cbba827139e";
+    let eph_pk = x"5c38d3668c45ff891766ee99bd3522ae48d9771dc77e8a6ac9f0bde6c3a2ca48";
+    let expected_bytes = x"29287d8584fb5b71b8d62e7224b867207d205fb61d42b7cce0deef95bf4e8202";
     assert!(pk_to_address(&eph_pk) == expected_bytes, ENoAccess);
 }
