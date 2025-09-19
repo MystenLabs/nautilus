@@ -83,34 +83,54 @@ This function ensures the signature is verified against the enclave public key. 
 
 ## Using the seal-example weather service:
 
-### Step 0: Build and Register Enclave
+### Step 0: Build, Run and Register Enclave
 
-```bash
-make ENCLAVE_APP=seal-example
+Refer to the main guide for a more detailed instructions. 
 
-# todo: replace with real pcrs
-PCR0=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-PCR1=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-PCR2=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+```shell
+# publish the enclave package
+cd move/enclave
+sui move build && sui client publish
 
-ENCLAVE_PACKAGE_ID=0xc1f1741024ea94dd2eb8b870ae01944fbec60f785cf95e5437908ed401f99c97
+ENCLAVE_PACKAGE_ID=0xe796d3cccaeaa5fd615bd1ac2cc02c37077471b201722f66bb131712a86f4ab6
 
-CAP_OBJECT_ID=0x26e2329e4a174306299b83f56b2e0dcf5583f3977bb39bcb142d17c8c4ea40a8
-ENCLAVE_CONFIG_OBJECT_ID=0x41e0fada7274416ed0a559a3e6c8a790ce4c323307dabe2dcb70e8d8212f6cc5
-APP_PACKAGE_ID=0xfaeabd7f317dd7ae40d83b73cfa68b92795f48540d03f1232b33207e22d0a62f
+# publish the app package
+cd move/seal-example
+sui move build && sui client publish
 
+CAP_OBJECT_ID=0xad6399fccb6b407f220b915d93041cd4a3f0f676a46ba0346a6b89ff8bc64225
+ENCLAVE_CONFIG_OBJECT_ID=0x3d1305fe6e2e1204effb139b601d61a1078e0ec43e654289e39dd17130a8faa8
+APP_PACKAGE_ID=0x1310ea295e328efbb4bc269ae08f053c5c179136ef5ad29d382d3213ea09f3c9
+
+# update seal_config.yaml with APP_PACKAGE_ID inside the enclave
+# in the enclave: build, run and expose
+make ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
+
+# record the pcrs 
+cat out/nitro.pcrs
+
+PCR0=4323e5ed6409b8fb6d24d121c3e7a9a0568da49585041c216fe5f59e05107f9c283ad2e74689be3a7940e6257eb3ccd9
+PCR1=4323e5ed6409b8fb6d24d121c3e7a9a0568da49585041c216fe5f59e05107f9c283ad2e74689be3a7940e6257eb3ccd9
+PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+
+# populate name and url
 MODULE_NAME=weather
 OTW_NAME=WEATHER
 ENCLAVE_URL=http://<PUBLIC_IP>:3000
 
+# update pcrs
+sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
+
+# optional, update name
+sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "some name here"
+
+# register the enclave onchain 
 sh register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # read from output the created enclave obj id and finds its initial shared version. 
-ENCLAVE_OBJECT_ID=0x7019c4c455f4894018421d54bd300689162fb104ac7d00ef7f6ac4062cfd3e3b
-ENCLAVE_OBJ_VERSION=546376961
+ENCLAVE_OBJECT_ID=0xf42798dd0aa15657c4ed28e1997b193ca27cdf26e3ef4d58b46968d24d1135a9
+ENCLAVE_OBJ_VERSION=582840236
 ```
-
-This step can be done anywhere with a Sui wallet. 
 
 Currently, the enclave is running but has no Seal secret and cannot process requests. 
 ```bash
@@ -121,29 +141,37 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ### Step 1: Encrypt Secret (One-time Setup)
 
+The Seal CLI command can be ran in the root of [Seal repo](https://github.com/MystenLabs/seal). This step can be done anywhere where the secret value is secure.
+
+This command looks up the public keys of the specified key servers ID using public fullnode on the given network. Then it uses the identity `id`, threshold `t`, the specified key servers `-k` and the policy package `-p` to encrypt the secret. 
+
 ```bash
 cargo run --bin seal-cli encrypt --secret 045a27812dbe456392913223221306 \
     --id 0000 \
-    -p 0xfaeabd7f317dd7ae40d83b73cfa68b92795f48540d03f1232b33207e22d0a62f \
+    -p $APP_PACKAGE_ID \
     -t 2 \
     -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
     -n testnet
 
-Encrypted object: 
-<ENCRYPTED_OBJECT>
+# Output: <ENCRYPTED_OBJECT>
 ```
 
-TThe Seal CLI command can be ran in the [Seal repo](https://github.com/MystenLabs/seal). This command looks up the public keys of the specified key servers ID using public fullnode on the given network. Then it uses the identity `id` and threshold `t` to encrypt the secret. This step can be done anywhere where the secret value is secure. The package ID is the package containing the Seal policy. 
+`--secret`: The secret value that you are encrypting, that later only the enclave has access to. Here we use the weather api key as an example.  
+`--id`: An identifier that can be defined as anything, as long as consistent with the one used in the next step in the `/init` request. Here we use `0000` as an example. 
+`-p`: The package ID is the package containing the Seal policy. 
+`-k`: A list of key server object ids, here we use the two mysten open testnet servers. 
+`-t`: Threshold used for encryption. 
+`-n`: The network the key servers you are using.
 
 ### Step 2: Load the encrypted secret to enclave
 
+This step is done in the host that the enclave runs in, that can communicate to the enclave via 3001. 
+
 ```bash
-curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"enclave_object_id": "<YOUR_ENCLAVE_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "key_name": "weather_api_key" }'
+curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"enclave_object_id": "<ENCLAVE_OBJECT_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "id": "0000" }'
 
 # Output: {"encoded_request": "<ENCODED_REQUEST>"}
 ```
-
-This step is done in the host that can communicate to the enclave via 3001. 
 
 **What happens**:
 - The enclave generates ephemeral ElGamal keypair and temporily store in memory.
@@ -151,6 +179,10 @@ This step is done in the host that can communicate to the enclave via 3001.
 - The enclave wallet signs request with session key and returns encoded fetch request. 
 
 ### Step 3: Fetch Keys from Seal Servers
+
+The Seal CLI command can be ran in the root of [Seal repo](https://github.com/MystenLabs/seal). This can be done any with Internet connection. 
+
+This command parses the hex BCS encoded `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. The key servers verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the seal policy is satifies. The response is an encoded list of Seal server responses. 
 
 ```bash
 cargo run --bin seal-cli fetch-keys --request <ENCODED_REQUEST> \
@@ -162,12 +194,9 @@ Encoded seal responses:
 <ENCODED_SEAL_RESPONSES>
 ```
 
-TThe Seal CLI command can be ran in the [Seal repo](https://github.com/MystenLabs/seal). This command parses the hex BCS encoded `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. This can be done any with Internet connection. 
-
-**What happens**:
-- CLI contacts multiple Seal servers using the fetch key request. 
-- Each server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the seal policy is satifies. 
-- CLI collects all Seal server responses till threshold is reached. 
+`-k`: A list of key server object ids, here we use the two mysten open testnet servers. 
+`-t`: Threshold used for encryption. 
+`-n`: The network the key servers you are using.
 
 ### Step 4: Complete Secret Loading
 

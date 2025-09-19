@@ -211,8 +211,7 @@ After finalizing the Rust code, the Dapp administrator can register the enclave 
 ```shell
 # optionally
 sui client switch --env testnet # or appropriate network
-sui client faucet
-sui client gas
+sui client gas # request gas from faucet.sui.io if needed
 
 # deploy the enclave package
 cd move/enclave

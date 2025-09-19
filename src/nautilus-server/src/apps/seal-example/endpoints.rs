@@ -105,7 +105,7 @@ pub async fn init_parameter_load(
         package_id,
         enclave_object_id,
         request.initial_shared_version,
-        request.id,
+        Hex::decode(&request.id).map_err(|e| EnclaveError::GenericError(format!("Invalid hex encoding: {}", e)))?,
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
@@ -222,12 +222,12 @@ async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
     initial_shared_version: u64,
-    id: String,
+    id: Vec<u8>,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     let inputs = vec![
         // Input 0: id arg
         Input::Pure {
-            value: bcs::to_bytes(id.as_bytes())?,
+            value: bcs::to_bytes(&id)?,
         },
         // Input 1: enclave arg (shared object)
         Input::Shared {
