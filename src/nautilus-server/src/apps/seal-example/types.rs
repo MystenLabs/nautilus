@@ -16,7 +16,7 @@ pub struct SealConfig {
 pub struct InitParameterLoadRequest {
     pub enclave_object_id: String,
     pub initial_shared_version: u64,
-    pub id: String, // identity for seal encryption
+    pub ids: Vec<String>, // all ids for all encrypted objects
 }
 
 /// Response for /init_parameter_load
@@ -28,6 +28,13 @@ pub struct InitParameterLoadResponse {
 /// Request for /complete_parameter_load
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompleteParameterLoadRequest {
-    pub encrypted_object: String,
-    pub seal_responses: String,
+    pub encrypted_objects: Vec<String>,
+    pub seal_responses: String, 
+}
+
+/// Response for /complete_parameter_load, for demo on decrypting many secrets. 
+/// Can be removed for your own app. 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CompleteParameterLoadResponse {
+    pub dummy_secrets: Vec<String>,
 }
