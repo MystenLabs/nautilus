@@ -188,11 +188,10 @@ pub async fn complete_parameter_load(
     // Decrypt each encrypted object
     let mut decrypted_results = Vec::new();
     for encrypted_object in request.encrypted_objects.iter() {
-        // Look up keys for the given id of the encrypted object
-        let keys_for_id = cached_keys.get(&encrypted_object.id).ok_or_else(|| {
+        let full_id = seal_sdk::create_full_id(&encrypted_object.package_id.into_inner(), &encrypted_object.id);
+        let keys_for_id = cached_keys.get(&full_id).ok_or_else(|| {
             EnclaveError::GenericError(format!(
-                "No keys cached for object {:?}",
-                encrypted_object.id
+                "No keys cached for object {:?}", full_id
             ))
         })?;
         // build the hash map of usks (server_id -> usk)
@@ -203,7 +202,7 @@ pub async fn complete_parameter_load(
             usks.insert(server_id.clone(), user_secret_key.clone());
             let pk = server_pk_map.get(server_id).ok_or_else(|| {
                 EnclaveError::GenericError(format!(
-                    "No public key configured for server {}",
+                    "No public key found for server {}",
                     server_id
                 ))
             })?;

@@ -31,7 +31,7 @@ regex = { version = "1.5", optional = true }
 
 sui-sdk-types = { git = "https://github.com/mystenlabs/sui-rust-sdk", features = ["serde"], rev = "86a9e06", optional = true }
 sui-crypto = { git = "https://github.com/mystenlabs/sui-rust-sdk", features = ["ed25519"], rev = "86a9e06", optional = true }
-seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "b08a6b4b2415997845b597ccf0ec354876894994", package = "seal-sdk", optional = true }
+seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "495a655a9a81303d2e63565d2a9ef3708392bc66", package = "seal-sdk", optional = true }
 
 [features]
 weather-example = []
