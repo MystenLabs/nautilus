@@ -19,7 +19,9 @@ async fn main() -> Result<()> {
     // Answer `y` to `Do you want to use a secret?` and finish.
     // Then uncomment this code instead to fetch from env var API_KEY, which is fetched from secret manager.
     // let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
-    // todo: not needed for seal-example
+
+    // NOTE: seal-example does not use this api_key from AppState, instead it uses SEAL_API_KEY in lazy static
+    // as an example. Remove if needed in your own application.
     let api_key = "045a27812dbe456392913223221306".to_string();
 
     let state = Arc::new(AppState { eph_kp, api_key });

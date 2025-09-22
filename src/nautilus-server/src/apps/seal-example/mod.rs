@@ -17,7 +17,6 @@ use seal_sdk::ElGamalSecretKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use sui_crypto::ed25519::Ed25519PrivateKey;
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -28,13 +27,10 @@ lazy_static::lazy_static! {
         serde_yaml::from_str(config_str)
             .expect("Failed to parse seal_config.yaml")
     };
-    /// Wallet accessible only in enclave. Used to produce the signature arg in seal_approve PTB.
-    pub static ref ENCLAVE_WALLET: Arc<RwLock<Ed25519PrivateKey>> = {
-        let ed25519_sk = Ed25519PrivateKey::generate(rand::thread_rng());
-        Arc::new(RwLock::new(ed25519_sk))
-    };
+    /// Encryption keys generated once at startup
     /// Secret key where the public key is used for Seal servers to encrypt response to.
     pub static ref ENCRYPTION_SECRET_KEY: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
+
     /// Secret plaintext decrypted and set in enclave only.
     pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
 }
