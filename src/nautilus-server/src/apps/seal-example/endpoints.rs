@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::types::*;
-use crate::apps::seal_example::{ENCRYPTION_SECRET_KEY, SEAL_API_KEY, SEAL_CONFIG};
+use crate::apps::seal_example::{ENCRYPTION_KEYS, SEAL_API_KEY, SEAL_CONFIG};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
@@ -12,14 +12,10 @@ use fastcrypto::encoding::Hex;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::{KeyPair, Signer};
 use rand::thread_rng;
-use seal_sdk::elgamal_decrypt;
-use seal_sdk::genkey;
 use seal_sdk::types::{FetchKeyRequest, KeyId};
 use seal_sdk::Certificate;
 use seal_sdk::IBEPublicKey;
-use seal_sdk::IBEUserSecretKeys;
-use seal_sdk::{ibe_verify_user_secret_key, signed_message, signed_request};
-use seal_sdk::{seal_decrypt, IBEPublicKeys};
+use seal_sdk::{seal_decrypt_all_objects, signed_message, signed_request};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -99,19 +95,15 @@ pub async fn init_parameter_load(
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
-    // Generate ephemeral encryption key and store temporarily.
-    let (enc_secret, enc_key, enc_verification_key) = genkey(&mut thread_rng());
-    {
-        let mut enc_secret_guard = (*ENCRYPTION_SECRET_KEY).write().await;
-        *enc_secret_guard = Some(enc_secret);
-    }
+    // Use the lazily initialized encryption keys.
+    let (_enc_secret, enc_key, enc_verification_key) = &*ENCRYPTION_KEYS;
     // Create FetchKeyRequest.
-    let request_message = signed_request(&ptb, &enc_key, &enc_verification_key);
+    let request_message = signed_request(&ptb, enc_key, enc_verification_key);
     let request_signature = session.sign(&request_message);
     let request = FetchKeyRequest {
         ptb: Base64::encode(bcs::to_bytes(&ptb).expect("should not fail")),
-        enc_key,
-        enc_verification_key,
+        enc_key: *enc_key,
+        enc_verification_key: *enc_verification_key,
         request_signature,
         certificate,
     };
@@ -146,77 +138,16 @@ pub async fn complete_parameter_load(
         server_pk_map.insert(*server_id, *pk);
     }
 
-    // Load the encryption secret key
-    let enc_secret_guard = (*ENCRYPTION_SECRET_KEY).read().await;
-    let enc_secret = enc_secret_guard.as_ref().ok_or_else(|| {
-        EnclaveError::GenericError("Encryption secret key not found in cache".to_string())
-    })?;
+    // Load the encryption secret key from lazy static
+    let (enc_secret, _enc_key, _enc_verification_key) = &*ENCRYPTION_KEYS;
 
-    // Build a hashmap of all decrypted and verified keys
-    // Map from decryption_key.id to a map of server_id -> user_secret_key
-    // The user_secret_key is the result of elgamal_decrypt which we'll store directly
-    type UserSecretKey = fastcrypto::groups::bls12381::G1Element;
-    let mut cached_keys: HashMap<Vec<u8>, HashMap<ObjectID, UserSecretKey>> = HashMap::new();
-
-    // Process all seal responses and build the key map
-    for (server_id, seal_response) in request.seal_responses.iter() {
-        // Find the server's pk
-        let public_key = server_pk_map.get(server_id).ok_or_else(|| {
-            EnclaveError::GenericError(format!("No public key configured for server {}", server_id))
-        })?;
-
-        for decryption_key in seal_response.decryption_keys.iter() {
-            // Decrypt and verify the user secret key
-            let user_secret_key = elgamal_decrypt(enc_secret, &decryption_key.encrypted_key);
-            ibe_verify_user_secret_key(&user_secret_key, &decryption_key.id, public_key).map_err(
-                |e| {
-                    EnclaveError::GenericError(format!(
-                        "Failed to verify user secret key for server {}: {}",
-                        server_id, e
-                    ))
-                },
-            )?;
-
-            // Build the map of id -> a map of server_obj_id -> usk
-            cached_keys
-                .entry(decryption_key.id.clone())
-                .or_default()
-                .insert(*server_id, user_secret_key);
-        }
-    }
-
-    // Decrypt each encrypted object
-    let mut decrypted_results = Vec::new();
-    for encrypted_object in request.encrypted_objects.iter() {
-        let full_id = seal_sdk::create_full_id(
-            &encrypted_object.package_id.into_inner(),
-            &encrypted_object.id,
-        );
-        let keys_for_id = cached_keys.get(&full_id).ok_or_else(|| {
-            EnclaveError::GenericError(format!("No keys cached for object {:?}", full_id))
-        })?;
-        // build the hash map of usks (server_id -> usk)
-        // build the list of pks in the order of server_ids.
-        let mut pks = Vec::new();
-        let mut usks = HashMap::new();
-        for (server_id, user_secret_key) in keys_for_id.iter() {
-            usks.insert(*server_id, *user_secret_key);
-            let pk = server_pk_map.get(server_id).ok_or_else(|| {
-                EnclaveError::GenericError(format!("No public key found for server {}", server_id))
-            })?;
-            pks.push(*pk);
-        }
-        let secret = seal_decrypt(
-            encrypted_object,
-            &IBEUserSecretKeys::BonehFranklinBLS12381(usks),
-            Some(&IBEPublicKeys::BonehFranklinBLS12381(pks.clone())),
-        )
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt object: {}", e)))?;
-
-        decrypted_results.push(secret);
-    }
-
-    println!("decrypted_results: {:?}", decrypted_results.len());
+    let decrypted_results = seal_decrypt_all_objects(
+        enc_secret,
+        &request.seal_responses,
+        &request.encrypted_objects,
+        &server_pk_map,
+    )
+    .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt objects: {}", e)))?;
 
     // The first secret is the weather API key, store it
     if let Some(api_key_bytes) = decrypted_results.first() {

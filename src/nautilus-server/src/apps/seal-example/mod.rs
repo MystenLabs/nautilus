@@ -13,6 +13,8 @@ use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
+use rand::thread_rng;
+use seal_sdk::genkey;
 use seal_sdk::ElGamalSecretKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,8 +30,9 @@ lazy_static::lazy_static! {
             .expect("Failed to parse seal_config.yaml")
     };
     /// Encryption keys generated once at startup
-    /// Secret key where the public key is used for Seal servers to encrypt response to.
-    pub static ref ENCRYPTION_SECRET_KEY: Arc<RwLock<Option<ElGamalSecretKey>>> = Arc::new(RwLock::new(None));
+    pub static ref ENCRYPTION_KEYS: (ElGamalSecretKey, seal_sdk::types::ElGamalPublicKey, seal_sdk::types::ElgamalVerificationKey) = {
+        genkey(&mut thread_rng())
+    };
 
     /// Secret plaintext decrypted and set in enclave only.
     pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
