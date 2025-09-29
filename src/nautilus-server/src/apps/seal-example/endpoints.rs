@@ -102,8 +102,8 @@ pub async fn init_parameter_load(
     let request_signature = session.sign(&request_message);
     let request = FetchKeyRequest {
         ptb: Base64::encode(bcs::to_bytes(&ptb).expect("should not fail")),
-        enc_key: *enc_key,
-        enc_verification_key: *enc_verification_key,
+        enc_key: enc_key.clone(),
+        enc_verification_key: enc_verification_key.clone(),
         request_signature,
         certificate,
     };

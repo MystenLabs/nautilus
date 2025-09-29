@@ -53,6 +53,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes-gcm-siv"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae0784134ba9375416d469ec31e7c5f9fa94405049cf08c5ce5b4698be673e0d"
+dependencies = [
+ "aead",
+ "aes",
+ "cipher",
+ "ctr",
+ "polyval",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,6 +180,17 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
+]
+
+[[package]]
+name = "ark-secp256k1"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c02e954eaeb4ddb29613fee20840c2bbc85ca4396d53e33837e11905363c5f2"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-std",
 ]
 
 [[package]]
@@ -587,7 +613,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.5.11"
-source = "git+https://github.com/MystenLabs/seal?rev=f45d6af7077a39f8e1f323e37a4e30cfc0414dd0#f45d6af7077a39f8e1f323e37a4e30cfc0414dd0"
+source = "git+https://github.com/MystenLabs/seal?rev=608d30caba1d1fbf5f1d82e5a8e6280010fd3609#608d30caba1d1fbf5f1d82e5a8e6280010fd3609"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -907,17 +933,20 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.8"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=69d496c71fb37e3d22fe85e5bbfd4256d61422b9#69d496c71fb37e3d22fe85e5bbfd4256d61422b9"
+version = "0.1.9"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=d1fcb853196c3de7888ed8fad74f419b8c8fbe3b#d1fcb853196c3de7888ed8fad74f419b8c8fbe3b"
 dependencies = [
  "aes",
  "aes-gcm",
+ "aes-gcm-siv",
  "ark-ec",
  "ark-ff",
+ "ark-secp256k1",
  "ark-secp256r1",
  "ark-serialize",
  "auto_ops",
  "base64ct",
+ "bcs",
  "bech32",
  "bincode",
  "blake2",
@@ -962,7 +991,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=69d496c71fb37e3d22fe85e5bbfd4256d61422b9#69d496c71fb37e3d22fe85e5bbfd4256d61422b9"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=d1fcb853196c3de7888ed8fad74f419b8c8fbe3b#d1fcb853196c3de7888ed8fad74f419b8c8fbe3b"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -2348,7 +2377,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "seal-sdk"
 version = "0.5.11"
-source = "git+https://github.com/MystenLabs/seal?rev=f45d6af7077a39f8e1f323e37a4e30cfc0414dd0#f45d6af7077a39f8e1f323e37a4e30cfc0414dd0"
+source = "git+https://github.com/MystenLabs/seal?rev=608d30caba1d1fbf5f1d82e5a8e6280010fd3609#608d30caba1d1fbf5f1d82e5a8e6280010fd3609"
 dependencies = [
  "bcs",
  "chrono",
