@@ -7,37 +7,17 @@ pub mod types;
 pub use endpoints::{complete_parameter_load, init_parameter_load};
 pub use types::*;
 
+use crate::app::endpoints::SEAL_API_KEY;
 use crate::common::IntentMessage;
 use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
-use rand::thread_rng;
-use seal_sdk::genkey;
-use seal_sdk::ElGamalSecretKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::info;
-
-lazy_static::lazy_static! {
-    /// Configuration for Seal key servers, public keys are preconfigured so they can be used to verify fetch key responses.
-    pub static ref SEAL_CONFIG: SealConfig = {
-        let config_str = include_str!("seal_config.yaml");
-        serde_yaml::from_str(config_str)
-            .expect("Failed to parse seal_config.yaml")
-    };
-    /// Encryption keys generated once at startup
-    pub static ref ENCRYPTION_KEYS: (ElGamalSecretKey, seal_sdk::types::ElGamalPublicKey, seal_sdk::types::ElgamalVerificationKey) = {
-        genkey(&mut thread_rng())
-    };
-
-    /// Secret plaintext decrypted and set in enclave only.
-    pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
-}
-
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WeatherResponse {

@@ -1,38 +1,54 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::types::*;
-use crate::apps::seal_example::{ENCRYPTION_KEYS, SEAL_API_KEY, SEAL_CONFIG};
-use crate::AppState;
-use crate::EnclaveError;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use axum::extract::State;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::encoding::Hex;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::traits::{KeyPair, Signer};
 use rand::thread_rng;
 use seal_sdk::types::{FetchKeyRequest, KeyId};
-use seal_sdk::Certificate;
-use seal_sdk::IBEPublicKey;
-use seal_sdk::{seal_decrypt_all_objects, signed_message, signed_request};
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use sui_sdk_types::Argument;
-use sui_sdk_types::Command;
-use sui_sdk_types::Identifier;
-use sui_sdk_types::Input;
-use sui_sdk_types::MoveCall;
-use sui_sdk_types::ObjectId as ObjectID;
-use sui_sdk_types::PersonalMessage;
-use sui_sdk_types::ProgrammableTransaction;
-use sui_sdk_types::TypeTag;
+use seal_sdk::{
+    genkey, seal_decrypt_all_objects, signed_message, signed_request, Certificate, ElGamalSecretKey,
+};
+use sui_sdk_types::{
+    Argument, Command, Identifier, Input, MoveCall, ObjectId as ObjectID, PersonalMessage,
+    ProgrammableTransaction,
+};
+use tokio::sync::RwLock;
 
-/// Step 1: This endpoint takes enclave obj id with initial shared version,
-/// a list of key IDs and package id where seal_approve is defined.
-/// Returns a FetchKeyRequest that contains the certificate and desired ptb.
+use super::types::*;
+use crate::{AppState, EnclaveError};
+
+lazy_static::lazy_static! {
+    /// Configuration for Seal key servers, containing package
+    /// IDs, key server object IDs and public keys are hardcoded
+    /// here so they can be used to verify fetch key responses.
+    pub static ref SEAL_CONFIG: SealConfig = {
+        let config_str = include_str!("seal_config.yaml");
+        serde_yaml::from_str(config_str)
+            .expect("Failed to parse seal_config.yaml")
+    };
+    /// Encryption secret key generated initialized on startup.
+    pub static ref ENCRYPTION_KEYS: (ElGamalSecretKey, seal_sdk::types::ElGamalPublicKey, seal_sdk::types::ElgamalVerificationKey) = {
+        genkey(&mut thread_rng())
+    };
+
+    /// Secret plaintext decrypted and set in enclave here when
+    /// /complete_parameter_load finishes. This is the weather
+    /// API key in this example, change it for your application.
+    pub static ref SEAL_API_KEY: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
+}
+
+/// This endpoint takes an enclave obj id with initial shared version
+/// and a list of key identities. It initializes the session key and
+/// uses state's ephemeral key to sign the personal message. Returns
+/// a Hex encoded BCS serialized FetchKeyRequest containing the certificate
+/// and the desired ptb for seal_approve. This is the first step for
+/// the bootstrap phase.
 pub async fn init_parameter_load(
     State(state): State<Arc<AppState>>,
     Json(request): Json<InitParameterLoadRequest>,
@@ -42,7 +58,7 @@ pub async fn init_parameter_load(
             "API key already set".to_string(),
         ));
     }
-    // Generate session and create certificate.
+    // Generate the session and create certificate.
     let session = Ed25519KeyPair::generate(&mut thread_rng());
     let session_vk = session.public();
     let creation_time = SystemTime::now()
@@ -57,16 +73,16 @@ pub async fn init_parameter_load(
         ttl_min,
     );
 
-    // Convert fastcrypto keypair to sui-crypto for signing
+    // Convert fastcrypto keypair to sui-crypto for signing.
     let sui_private_key = {
         let priv_key_bytes = state.eph_kp.as_ref();
         let key_bytes: [u8; 32] = priv_key_bytes
             .try_into()
-            .map_err(|_| EnclaveError::GenericError("Invalid private key length".to_string()))?;
+            .expect("Invalid private key length");
         sui_crypto::ed25519::Ed25519PrivateKey::new(key_bytes)
     };
 
-    // Sign personal message
+    // Sign personal message.
     let signature = {
         use sui_crypto::SuiSigner;
         sui_private_key
@@ -76,7 +92,7 @@ pub async fn init_parameter_load(
             })?
     };
 
-    // Create certificate with enclave ephemeral key wallet and session vk.
+    // Create certificate with enclave's ephemeral key's address and session vk.
     let certificate = Certificate {
         user: sui_private_key.public_key().to_address(),
         session_vk: session_vk.clone(),
@@ -86,7 +102,7 @@ pub async fn init_parameter_load(
         mvr_name: None,
     };
 
-    // Create PTB for seal_approve of package with multiple IDs
+    // Create PTB for seal_approve of package with all key IDs.
     let ptb = create_ptb(
         SEAL_CONFIG.package_id,
         request.enclave_object_id,
@@ -95,9 +111,11 @@ pub async fn init_parameter_load(
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
-    // Use the lazily initialized encryption keys.
+
+    // Load the encryption public key and verification key.
     let (_enc_secret, enc_key, enc_verification_key) = &*ENCRYPTION_KEYS;
-    // Create FetchKeyRequest.
+
+    // Create the FetchKeyRequest.
     let request_message = signed_request(&ptb, enc_key, enc_verification_key);
     let request_signature = session.sign(&request_message);
     let request = FetchKeyRequest {
@@ -113,11 +131,12 @@ pub async fn init_parameter_load(
     }))
 }
 
-/// Step 3: Complete parameter load. This endpoint accepts the encrypted
-/// object and encoded seal responses, which are fetched by the host
-/// using cli. It fetches keys from each server for all ids included in PTB,
-/// then decrypts all encrypted objects. Initialize SEAL_API (the first secret)
-/// if decryption is successful and returns OK.
+/// This endpoint accepts a list of encrypted objects and encoded seal responses,
+/// It parses the seal responses for all IDs and decrypt all encrypted objects
+/// with the encryption secret key. If all encrypted objects are decrypted, initialize
+/// the SEAL_API_KEY with the first secret and return the dummy secrets in the response.
+/// Remove dummy secrets for your app. This is done after the Seal responses are fetched
+/// and to complete the bootstrap phase.
 pub async fn complete_parameter_load(
     State(_state): State<Arc<AppState>>,
     Json(request): Json<CompleteParameterLoadRequest>,
@@ -128,28 +147,17 @@ pub async fn complete_parameter_load(
         ));
     }
 
-    // BUild a map for service obj id -> pk
-    let mut server_pk_map: HashMap<ObjectID, IBEPublicKey> = HashMap::new();
-    for (server_id, pk) in SEAL_CONFIG
-        .key_servers
-        .iter()
-        .zip(SEAL_CONFIG.public_keys.iter())
-    {
-        server_pk_map.insert(*server_id, *pk);
-    }
-
-    // Load the encryption secret key from lazy static
+    // Load the encryption secret key and try decrypting all encrypted objects.
     let (enc_secret, _enc_key, _enc_verification_key) = &*ENCRYPTION_KEYS;
-
     let decrypted_results = seal_decrypt_all_objects(
         enc_secret,
         &request.seal_responses,
         &request.encrypted_objects,
-        &server_pk_map,
+        &SEAL_CONFIG.server_pk_map,
     )
     .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt objects: {}", e)))?;
 
-    // The first secret is the weather API key, store it
+    // The first secret is the weather API key, store it.
     if let Some(api_key_bytes) = decrypted_results.first() {
         let api_key_str = String::from_utf8(api_key_bytes.clone())
             .map_err(|e| EnclaveError::GenericError(format!("Invalid UTF-8 in secret: {}", e)))?;
@@ -162,13 +170,15 @@ pub async fn complete_parameter_load(
         ));
     }
 
-    // Return the rest of dummy secrets as demo, remove as needed.
+    // Return the rest of decrypted secrets as an example,
+    // remove for your app as needed.
     Ok(Json(CompleteParameterLoadResponse {
         dummy_secrets: decrypted_results[1..].to_vec(),
     }))
 }
 
-/// Create a PTB with multiple commands for the given IDs and the enclave shared object.
+/// Helper function that creates a PTB with multiple commands for
+/// the given IDs and the enclave shared object.
 async fn create_ptb(
     package_id: ObjectID,
     enclave_object_id: ObjectID,
@@ -178,14 +188,14 @@ async fn create_ptb(
     let mut inputs = vec![];
     let mut commands = vec![];
 
-    // Create inputs for all IDs
+    // Create inputs for all IDs.
     for id in ids.iter() {
         inputs.push(Input::Pure {
             value: bcs::to_bytes(id)?,
         });
     }
 
-    // Add the shared enclave object as the last input
+    // Add the shared enclave object as the last input.
     let enclave_input_idx = inputs.len();
     inputs.push(Input::Shared {
         object_id: enclave_object_id,
@@ -193,17 +203,14 @@ async fn create_ptb(
         mutable: false,
     });
 
-    // Create MoveCall commands for each ID
-    // Each call to seal_approve with a different ID
+    // Create multiple commands with each one calling seal_approve
+    // with a different ID and the shared enclave object.
     for (idx, _id) in ids.iter().enumerate() {
         let move_call = MoveCall {
             package: package_id,
             module: Identifier::new("seal_policy")?,
             function: Identifier::new("seal_approve")?,
-            type_arguments: vec![TypeTag::from_str(&format!(
-                "{}::weather::WEATHER",
-                package_id
-            ))?],
+            type_arguments: vec![],
             arguments: vec![
                 Argument::Input(idx as u16),               // ID input
                 Argument::Input(enclave_input_idx as u16), // Enclave object
@@ -211,8 +218,5 @@ async fn create_ptb(
         };
         commands.push(Command::MoveCall(move_call));
     }
-
-    let ptb = ProgrammableTransaction { inputs, commands };
-
-    Ok(ptb)
+    Ok(ProgrammableTransaction { inputs, commands })
 }

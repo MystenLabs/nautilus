@@ -5,10 +5,11 @@ module app::seal_policy;
 
 use enclave::enclave::Enclave;
 use sui::hash::blake2b256;
+use app::weather::WEATHER;
 
 const ENoAccess: u64 = 0;
 
-entry fun seal_approve<T: drop>(_id: vector<u8>, enclave: &Enclave<T>, ctx: &TxContext) {
+entry fun seal_approve(_id: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
     assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
 }
 
