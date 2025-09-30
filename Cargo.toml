@@ -6,8 +6,7 @@ members = [
 ]
 
 exclude = [
-  "src/nautilus-server",
-  "src/seal-cli"
+  "src/nautilus-server"
 ]
 
 # Set default resolver to version 2
