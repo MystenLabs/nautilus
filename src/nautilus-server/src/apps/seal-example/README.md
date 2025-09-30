@@ -70,9 +70,9 @@ ENCLAVE_PACKAGE_ID=0xe796d3cccaeaa5fd615bd1ac2cc02c37077471b201722f66bb131712a86
 cd move/seal-example
 sui move build && sui client publish
 
-CAP_OBJECT_ID=0xad6399fccb6b407f220b915d93041cd4a3f0f676a46ba0346a6b89ff8bc64225
-ENCLAVE_CONFIG_OBJECT_ID=0x3d1305fe6e2e1204effb139b601d61a1078e0ec43e654289e39dd17130a8faa8
-APP_PACKAGE_ID=0x1310ea295e328efbb4bc269ae08f053c5c179136ef5ad29d382d3213ea09f3c9
+CAP_OBJECT_ID=0x89e7555ee02cc6738528aaf36830eff3e646be74cfccfcd8dd56e93a1baaa754
+ENCLAVE_CONFIG_OBJECT_ID=0x4e43382dd95a7e8b17760cecedd5d945676be7e3d9fa2e9c1c3c5d4b98c17ab9
+APP_PACKAGE_ID=0xcbe4fc6a0fee02ac8afbd3d3e0d2b759eb2d7341de040c077709a7e5f75944b8
 # update seal_config.yaml with APP_PACKAGE_ID inside the enclave
 
 # in the enclave: build, run and expose
@@ -81,8 +81,8 @@ make ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
 # record the pcrs 
 cat out/nitro.pcrs
 
-PCR0=8960ba8c91f716270703bd3317bc1d6a9f998a23ddb29c7c088c37ca7c937251eadfe89a01e675ee591fd7074d2c31b8
-PCR1=8960ba8c91f716270703bd3317bc1d6a9f998a23ddb29c7c088c37ca7c937251eadfe89a01e675ee591fd7074d2c31b8
+PCR0=2a6b97f6472e7f78d9687b5d6c5a5f056b0d40f528deb2abf1936fdf63251dd1348564d78cc1918a0d317521dda7fc11
+PCR1=2a6b97f6472e7f78d9687b5d6c5a5f056b0d40f528deb2abf1936fdf63251dd1348564d78cc1918a0d317521dda7fc11
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 
 # populate name and url
@@ -100,8 +100,8 @@ sui client call --function update_name --module enclave --package $ENCLAVE_PACKA
 sh register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # read from output the created enclave obj id and finds its initial shared version. 
-ENCLAVE_OBJECT_ID=0xe78a8335afccff18d7151b1259cef02a2e00e0a97179f2cb9e6fbef5766d2796
-ENCLAVE_OBJ_VERSION=584247069
+ENCLAVE_OBJECT_ID=0xadeef099c595b2459a22b7eda9e96f79be718a9a58060d98a203490d5c895298
+ENCLAVE_OBJ_VERSION=596477158
 ```
 
 Currently, the enclave is running but has no Seal secret and cannot process requests. 

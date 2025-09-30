@@ -1,7 +1,6 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,7 +16,7 @@ use seal_sdk::{
 };
 use sui_sdk_types::{
     Argument, Command, Identifier, Input, MoveCall, ObjectId as ObjectID, PersonalMessage,
-    ProgrammableTransaction, TypeTag,
+    ProgrammableTransaction,
 };
 use tokio::sync::RwLock;
 
@@ -211,10 +210,7 @@ async fn create_ptb(
             package: package_id,
             module: Identifier::new("seal_policy")?,
             function: Identifier::new("seal_approve")?,
-            type_arguments: vec![TypeTag::from_str(&format!(
-                "{}::weather::WEATHER",
-                package_id
-            ))?],
+            type_arguments: vec![],
             arguments: vec![
                 Argument::Input(idx as u16),               // ID input
                 Argument::Input(enclave_input_idx as u16), // Enclave object
