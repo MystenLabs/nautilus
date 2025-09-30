@@ -1,20 +1,23 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module app::seal_policy;
+module seal_policy_example::seal_policy;
 
 use enclave::enclave::Enclave;
 use sui::hash::blake2b256;
-use app::weather::WEATHER;
+use seal_policy_example::weather::WEATHER;
 
 const ENoAccess: u64 = 0;
 
 entry fun seal_approve(_id: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
+    // In this example whether the enclave is the latest version is not checked. One 
+    // can pass EnclaveConfig as an argument and check config_version if needed. 
     assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
 }
 
 fun pk_to_address(pk: &vector<u8>): vector<u8> {
-    let mut arr = vector[0u8]; // assume ed25519 flag
+    // Assume ed25519 flag for enclave's ephemeral key. Derive address as blake2b_hash(flag || pk). 
+    let mut arr = vector[0u8];
     arr.append(*pk);
     let hash = blake2b256(&arr);
     hash

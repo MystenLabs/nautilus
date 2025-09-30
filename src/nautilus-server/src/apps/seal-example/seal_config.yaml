@@ -8,4 +8,4 @@ public_keys:
   - "0xa8cb6f59027d14e0a3e97ea1bd79aa6a942f36ffc835f5025591c680d598a5541f087facb39fb12a1d9d71b3a510942b1760e5f6685f86660a4c38b178928bb6d0362a6c7e244985527832c783a8b5195db743ff2289de3b23226dad86cd70f1"
 
 # package containing seal_approve, replace it with your own APP_PACKAGE_ID
-package_id: "0xcbe4fc6a0fee02ac8afbd3d3e0d2b759eb2d7341de040c077709a7e5f75944b8"
+package_id: "0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d8"

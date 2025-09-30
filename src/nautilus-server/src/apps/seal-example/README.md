@@ -1,14 +1,16 @@
 # Seal-Nautilus Pattern
 
+This example is currently WIP. Use it as a reference only. 
+
 The Seal-Nautilus pattern provides secure secret management for enclave applications, ensuring the Seal secret is only accessible within verified enclaves. Here we reuse the weather example. Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
 
 ## Components
 
-1. Nautilus server running AWS Nitro Enclave: This is the only place that can decrypt the Seal secret according to the policy. It processes data and exposes the endpoints at port 3000 to the Internet. It also exposes port 3001 to the local host, which can only be used to initialize and complete the bootstrap steps. 
+1. Nautilus server running AWS Nitro Enclave (`src/nautilus-server/src/apps/seal-example`): This is the only place that can decrypt the Seal secret according to the policy. It processes data and exposes the endpoints at port 3000 to the Internet. It also exposes port 3001 to the local host, which can only be used to initialize and complete the bootstrap steps. 
 
 2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers). 
 
-3. Move contract `seal_policy.move`: This defines the `seal_approve` policy using the enclave object. 
+3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy using the enclave object. 
 
 ## Overview
 
@@ -70,9 +72,9 @@ ENCLAVE_PACKAGE_ID=0xe796d3cccaeaa5fd615bd1ac2cc02c37077471b201722f66bb131712a86
 cd move/seal-example
 sui move build && sui client publish
 
-CAP_OBJECT_ID=0x89e7555ee02cc6738528aaf36830eff3e646be74cfccfcd8dd56e93a1baaa754
-ENCLAVE_CONFIG_OBJECT_ID=0x4e43382dd95a7e8b17760cecedd5d945676be7e3d9fa2e9c1c3c5d4b98c17ab9
-APP_PACKAGE_ID=0xcbe4fc6a0fee02ac8afbd3d3e0d2b759eb2d7341de040c077709a7e5f75944b8
+CAP_OBJECT_ID=0x55bb39cf70fb646ef4b008fd8e4195a4753e6af1817df830f26215178c4a6cf3
+ENCLAVE_CONFIG_OBJECT_ID=0x57af8a8bde16bc99966d257765d1097a74ad36fb4c4cb632669e34224345b317
+APP_PACKAGE_ID=0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d8
 # update seal_config.yaml with APP_PACKAGE_ID inside the enclave
 
 # in the enclave: build, run and expose

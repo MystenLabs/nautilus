@@ -83,15 +83,11 @@ fn deserialize_encrypted_objects<'de, D>(deserializer: D) -> Result<Vec<Encrypte
 where
     D: Deserializer<'de>,
 {
-    let strings: Vec<String> = Vec::deserialize(deserializer)?;
-    let objects: Result<Vec<EncryptedObject>, D::Error> = strings
-        .into_iter()
-        .map(|s| {
-            let hex_bytes = Hex::decode(&s).map_err(serde::de::Error::custom)?;
-            bcs::from_bytes(&hex_bytes).map_err(serde::de::Error::custom)
-        })
-        .collect();
-    objects
+    let hex_string: String = String::deserialize(deserializer)?;
+    let bytes = Hex::decode(&hex_string).map_err(serde::de::Error::custom)?;
+    let responses: Vec<EncryptedObject> =
+        bcs::from_bytes(&bytes).map_err(serde::de::Error::custom)?;
+    Ok(responses)
 }
 
 /// Configuration for Seal key servers
