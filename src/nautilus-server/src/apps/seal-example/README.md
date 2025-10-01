@@ -2,11 +2,11 @@
 
 This example is currently WIP. Use it as a reference only. 
 
-The Seal-Nautilus pattern provides secure secret management for enclave applications, ensuring the Seal secret is only accessible within verified enclaves. Here we reuse the weather example. Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
+The Seal-Nautilus pattern provides secure secret management for enclave applications, ensuring the Seal secret is only accessible within the attested enclaves. Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
 
 ## Components
 
-1. Nautilus server running AWS Nitro Enclave (`src/nautilus-server/src/apps/seal-example`): This is the only place that can decrypt the Seal secret according to the policy. It processes data and exposes the endpoints at port 3000 to the Internet. It also exposes port 3001 to the local host, which can only be used to initialize and complete the bootstrap steps. 
+1. Nautilus server running inside AWS Nitro Enclave (`src/nautilus-server/src/apps/seal-example`): This is the only place that the Seal secret can be decrypted according to the policy. It exposes the endpoints at port 3000 to the Internet with the `/get_attestation` and `/process_data` endpoints. It also exposes port 3001 to the local host, which can only be used to initialize and complete the bootstrap steps inside the instance that the enclave runs.
 
 2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers). 
 
@@ -16,11 +16,11 @@ The Seal-Nautilus pattern provides secure secret management for enclave applicat
 
 Phase 1: Start and register the server
 
-1. The admin specifies the `seal_config.yaml` with the published package ID and Seal configurations. Then the admin builds and runs the enclave with no `SEAL_API_KEY`.
-2. The enclave exposes the `/get_attestation` endpoint. Admin uses it to register PCRs and the enclave public key. The `/process_data` currently returns an error because the `SEAL_API_KEY` is not yet initialized.
+1. The admin specifies the `seal_config.yaml` with the published Seal policy package ID and Seal configurations. Then the admin builds and runs the enclave with exposed `/get_attestation` endpoint. 
+2. Admin uses the attestation response to register PCRs and the enclave public key. The `/process_data` endpoint currently returns an error because the `SEAL_API_KEY` is not yet initialized.
 3. Admin registers the enclave on-chain and get enclave object ID and initial shared version. 
 
-Phase 2: Load the secret
+Phase 2: Bootstrap the secret in two steps
 
 1. Admin encrypts the secret with a specified key ID. This can be done for multiple secrets with different IDs. 
 2. Host calls `/init_parameter_load` with the enclave object and a list of key IDs used for encryption. Enclave returns the encoded `FetchKeyRequest`.
@@ -28,17 +28,17 @@ Phase 2: Load the secret
 4. Host calls `/complete_parameter_load` with all encrypted objects from step 1 and the Seal responses from step 3. Enclave decrypts the secret(s) and initializes `SEAL_API_KEY`. 
 5. Enclave can now serve `/process_data` requests. 
 
-### Why Two-Phase Bootstrap?
+### Why bootstrap requires two steps?
 
-The two-phase bootstrap is needed because enclaves operate without direct internet access, hence cannot fetch secrets from Seal key servers URL themselves. As a workaround, the host acts as an intermediary to fetch encrypted secrets from Seal servers. 
+This is because an enclave operates without direct internet access so it cannot fetch secrets from Seal key servers' http endpoints themselves. Here we use the host acts as an intermediary to fetch encrypted secrets from Seal servers. 
 
-This delegation is secure because the Seal responses are encrypted using the enclave's encryption key, so only the enclave can later decrypt the Seal responses. The enclave is also initialized with the public keys of the Seal servers from `seal_config.yaml`, which can be used to verify the decrypted secrets to check the responses are not tempered with. 
+This delegation is secure because the Seal responses are encrypted under the enclave's encryption key, so only the enclave can later decrypt the fetched Seal responses. The enclave is also initialized with the public keys of the Seal servers in `seal_config.yaml`, which can be used to verify the decrypted secrets are not tampered with.
 
 ## Security Guarantees
 
-The secret is only accessible within the enclave. This is because the enclave generates an encryption secret key during initialization. This key never leaves the enclave memory. Seal servers encrypt the secret to the encryption public key. The host receives it when fetching keys with CLI, but cannot decrypt it. Only the enclave can verify the consistency and decrypt the secret. 
+The enclave generates an encryption secret key during initialization and this key never leaves the enclave memory. Seal servers encrypt the secret to the encryption public key, part of the `FetchKeyRequest` returned from `/init_parameter_load`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse`. The `FetchKeyResponse` is passed to the enclave at `/complete_parameter_load`, and only the enclave can verify the consistency and decrypt the secret. 
 
-Recall that the enclave also generates an ephemeral secret key on startup, that is only accessible in the enclave memory. The on-chain `seal_approve` function verifies the transaction sender equals the hash of the enclave's registered ephemeral public key. During `/init_parameter_load`, a signature is created using the ephemeral secret key, committed over the PTB containing the Seal policy. As part of the `FetchKeyRequest`, this signature is later verified when Seal servers dry run the transaction. This ensures only the enclave can produce such signatures that can result in successful Seal responses.
+Recall that the enclave also generates an ephemeral secret key on startup, that is only accessible in the enclave memory. The on-chain `seal_approve` function verifies the transaction sender is consistent with the enclave's registered ephemeral public key. During `/init_parameter_load`, a signature is created using the ephemeral secret key, committed over the PTB containing the Seal policy. As part of the `FetchKeyRequest`, this signature is later verified when Seal servers dry run the transaction. This ensures only the enclave can produce such signatures that can result in successful Seal responses.
 
 ```move
 entry fun seal_approve<T: drop>(_id: vector<u8>, enclave: &Enclave<T>, ctx: &TxContext) {
@@ -83,8 +83,8 @@ make ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
 # record the pcrs 
 cat out/nitro.pcrs
 
-PCR0=fe5beef498625cce6855402f8d2deec6c7b967fe4b5cb65df093b6cf2f88f263204317ccb3d95922a5d93cd9e42b4be8
-PCR1=fe5beef498625cce6855402f8d2deec6c7b967fe4b5cb65df093b6cf2f88f263204317ccb3d95922a5d93cd9e42b4be8
+PCR0=396572221bd41001a0cc69467e7eb51ed486d364ceea37846970db1e9c32d6ba9e305fd22becbb4fa7addd8d3e9f95d6
+PCR1=396572221bd41001a0cc69467e7eb51ed486d364ceea37846970db1e9c32d6ba9e305fd22becbb4fa7addd8d3e9f95d6
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 
 # populate name and url
@@ -102,11 +102,11 @@ sui client call --function update_name --module enclave --package $ENCLAVE_PACKA
 sh register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
 # read from output the created enclave obj id and finds its initial shared version. 
-ENCLAVE_OBJECT_ID=0xf98b88dc620ad68e02fc5785f507f25b109e75d32f228c0f50afd122663a84fb
-ENCLAVE_OBJ_VERSION=596506162
+ENCLAVE_OBJECT_ID=0xac877b48ea0b2a03c9e5c7143661897ae925ae66f5acfe88ff80285cd17874e5
+ENCLAVE_OBJ_VERSION=597601675
 ```
 
-Currently, the enclave is running but has no Seal secret and cannot process requests. 
+Currently, the enclave is running but has no `SEAL_API_KEY` and cannot process requests. 
 
 ```bash
 curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
@@ -114,15 +114,17 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 {"error":"API key not initialized. Please complete parameter load first."}%
 ```
 
-### Step 1: Encrypt Secret (One-time Setup)
+### Step 1: Encrypt Secret
 
 The Seal CLI command can be ran in the root directory of [Seal repo](https://github.com/MystenLabs/seal). This step can be done anywhere where the secret value is secure. The output is later used for step 4.
 
 This command looks up the public keys of the specified key servers ID using public fullnode on the given network. Then it uses the identity `id`, threshold `t`, the specified key servers `-k` and the policy package `-p` to encrypt the secret. 
 
 ```bash
-cargo run --bin seal-cli encrypt --secret 045a27812dbe456392913223221306 \
-    --id 0000 \
+# in seal repo
+APP_PACKAGE_ID=0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d8
+cargo run --bin seal-cli encrypt --secrets 303435613237383132646265343536333932393133323233323231333036,0101 \
+    --ids 0000,0001 \
     -p $APP_PACKAGE_ID \
     -t 2 \
     -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
@@ -131,9 +133,14 @@ cargo run --bin seal-cli encrypt --secret 045a27812dbe456392913223221306 \
 # Output: <ENCRYPTED_OBJECT>
 ```
 
-`--secret`: The secret value that you are encrypting, that later only the enclave has access to. Here we use the weather api key as an example.  
-`--id`: An identifier that can be defined as anything, as long as it is consistent with the one used in the next step in the `/init` request. Here we use `0000` as an example. 
-`-p`: The package ID is the package containing the Seal policy. 
+`--secrets`: A list of secret values that you are encrypting, that later only the enclave has access to. Here we use the weather api key and a dummy secret `0101` as example. The `weather-api-key` converted from UTF-8 to hex in python: 
+
+```python
+>>> '045a27812dbe456392913223221306'.encode('utf-8').hex()'303435613237383132646265343536333932393133323233323231333036'
+```
+
+`--ids`: A list of identifiers that uniquely map to the list of secrets. They need to be consistent with the ones used in the `/init_parameter_load` request. Here we use `0000`, `0001` as an example. 
+`-p`: The package ID is the package containing the Seal policy. Here we use <APP_PACKAGE_ID> from the earlier step. 
 `-k`: A list of key server object ids, here we use the two Mysten open testnet servers. 
 `-t`: Threshold used for encryption. 
 `-n`: The network of the key servers you are using.
@@ -142,22 +149,23 @@ cargo run --bin seal-cli encrypt --secret 045a27812dbe456392913223221306 \
 
 This step is done in the host that the enclave runs in, that can communicate to the enclave via port 3001. 
 
-In this call, the enclave creates the certificate containing the constructed PTB calling `seal_approve` with enclave object ID. The enclave ephemeral key signs request with session key and returns encoded fetch key request. 
+In this call, the enclave creates the certificate containing the constructed PTB calling `seal_approve` with enclave object ID. The enclave ephemeral key signs request with session key and returns encoded fetch key request. The `ids` is a list of IDs used in step 1.  
 
 ```bash
-curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"enclave_object_id": "<ENCLAVE_OBJECT_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "ids": ["<ID_USED_FOR_ENCRYPT>"] }'
+curl -X POST http://localhost:3001/seal/init_parameter_load -H 'Content-Type: application/json' -d '{"enclave_object_id": "<ENCLAVE_OBJECT_ID>", "initial_shared_version": <ENCLAVE_OBJ_VERSION>, "ids": ["0000", "0001"] }'
 
-# Output: {"encoded_request": "<ENCODED_REQUEST>"}
+# Output: {"encoded_request": "<FETCH_KEY_REQUEST>"}
 ```
 
 ### Step 3: Fetch Keys from Seal Servers
 
 The Seal CLI command can be run in the root of [Seal repo](https://github.com/MystenLabs/seal). This can be done with any Internet connection. 
 
-This command parses the Hex encoded BCS serialized `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. The key server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the seal policy is satisfied. The response is an Hex encoded BCS serialized a list of Seal object IDs and its server responses. 
+This command parses the Hex encoded BCS serialized `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. The key server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the seal policy is satisfied. The response is an Hex encoded BCS serialized a list of Seal object IDs and its server responses. Note that the `<FETCH_KEY_REQUEST>` has a certificate expiry (defaults to 10 minutes), restart with step 2 if you receive errors that the certificate is expired. 
 
 ```bash
-cargo run --bin seal-cli fetch-keys --request <ENCODED_REQUEST> \
+# in seal repo
+cargo run --bin seal-cli fetch-keys --request <FETCH_KEY_REQUEST> \
     -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
     -t 2 \
     -n testnet
@@ -166,28 +174,31 @@ Encoded seal responses:
 <ENCODED_SEAL_RESPONSES>
 ```
 
+`--request`: Output of step 2. 
 `-k`: A list of key server object ids, here we use the two Mysten open testnet servers. 
 `-t`: Threshold used for encryption. 
 `-n`: The network of the key servers you are using.
 
 ### Step 4: Complete Secret Loading
 
-This step is done in the host that the enclave runs in, that can communicate to the enclave via 3001. 
+This step is done in the host that the enclave runs in, that can communicate to the enclave via 3001. The server decrypts the first secret and initializes it as the `SEAL_API_KEY`. It also returns the rest as dummy secrets as an example, remove as needed. 
 
 ```bash
 curl -X POST http://localhost:3001/seal/complete_parameter_load \
   -H "Content-Type: application/json" \
   -d '{
-    "encrypted_objects": ["<ENCRYPTED_OBJECT>"],
+    "encrypted_objects": "<ENCRYPTED_OBJECT>",
     "seal_responses": "<ENCODED_SEAL_RESPONSES>"
   }'
 
-{"dummy_secrets":[]} # ok
+{"dummy_secrets":[[1,1]]}
 ```
 
-In this call, the enclave uses its ephemeral secret key to decrypt key shares and performs threshold decryption to recover the secret. Then the enclave finishes the bootstrap phase by storing the decrypted secret in memory. In our example, this is the weather api key.
+In this call, the enclave uses its ephemeral secret key to decrypt key shares and performs threshold decryption to recover the secrets. Then the enclave finishes the bootstrap phase by storing the decrypted secret `SEAL_API_KEY` in memory.
 
 ### Step 5: Use the Service
+
+Now the enclave server is fully functional to process data. 
 
 ```bash
 curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
@@ -197,7 +208,7 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ## Handle Multiple Secrets
 
-Repeat step 1 with different `id` values for different secrets to get multiple encrypted objects. At step 2, pass in all IDs to `ids` in an array so the returned encoded response is constructed over all ids. Step 3 is unchanged. At step 4, provide a list of all `encrypted_objects` returned in step 1. 
+In step 1, pass in a list of secrets and a list of IDs to get an encoded list of encrypted objects. At step 2, pass in all IDs from step 1 to `ids` in an array so the returned `FetchKeyRequest` is constructed over all IDs. Step 3 and step 4 are unchanged. 
 
 In this example, we show that if multiple encrypted secrets are passed, it decrypts the first one as the weather api key and the rest are treated as dummy strings that are decrypted and returned in the response. Modify or remove the dummy logic with your own application if needed. 
 
