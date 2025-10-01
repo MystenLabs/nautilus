@@ -35,7 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
       - run: scripts/license_check.sh
 
   test:
@@ -43,13 +44,14 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-ghcloud]
-        feature: [weather-example, twitter-example]
+        feature: [weather-example, twitter-example, seal-example]
       fail-fast: false
     env:
       RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
       - uses: taiki-e/install-action@d30f7ecb94d4d882276efb3967be14b8ef34d289 # pin@nextest
       - name: cargo test (${{ matrix.feature }})
         working-directory: src/nautilus-server
@@ -65,12 +67,11 @@ jobs:
     runs-on: ubuntu-ghcloud
     strategy:
       matrix:
-        feature: [weather-example, twitter-example]
+        feature: [weather-example, twitter-example, seal-example]
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
-        with:
-          components: clippy
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
       # See '.cargo/config' for list of enabled/disabled clippy lints
       - name: cargo clippy (${{ matrix.feature }})
         working-directory: src/nautilus-server
@@ -80,9 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # pin@v3
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
-        with:
-          components: rustfmt
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
       - name: rustfmt
         working-directory: src/nautilus-server
         run: cargo fmt --all -- --check
