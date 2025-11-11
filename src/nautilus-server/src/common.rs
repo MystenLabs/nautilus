@@ -22,7 +22,6 @@ use tracing::info;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 /// ==== COMMON TYPES ====
-
 /// Intent message wrapper struct containing the intent scope and timestamp.
 /// This standardizes the serialized payload for signing.
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,7 +36,7 @@ pub struct IntentMessage<T: Serialize> {
 #[derive(Serialize_repr, Deserialize_repr, Debug)]
 #[repr(u8)]
 pub enum IntentScope {
-    Weather = 0,
+    ProcessData = 0,
 }
 
 impl<T: Serialize + Debug> IntentMessage<T> {
@@ -85,7 +84,6 @@ pub fn to_signed_response<T: Serialize + Clone>(
 }
 
 /// ==== HEALTHCHECK, GET ATTESTASTION ENDPOINT IMPL ====
-
 /// Response for get attestation.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetAttestationResponse {

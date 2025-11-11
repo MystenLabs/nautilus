@@ -14,7 +14,6 @@ use std::sync::Arc;
 /// Core Nautilus server logic, replace it with your own
 /// relavant structs and process_data endpoint.
 /// ====
-
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WeatherResponse {
@@ -65,7 +64,7 @@ pub async fn process_data(
             temperature,
         },
         last_updated_timestamp_ms,
-        IntentScope::Weather,
+        IntentScope::ProcessData,
     )))
 }
 
@@ -107,7 +106,7 @@ mod test {
             temperature: 13,
         };
         let timestamp = 1744038900000;
-        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::Weather);
+        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::ProcessData);
         let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
         assert!(
             signing_payload

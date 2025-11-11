@@ -15,13 +15,24 @@ use tracing::info;
 async fn main() -> Result<()> {
     let eph_kp = Ed25519KeyPair::generate(&mut rand::thread_rng());
 
-    // This value can be stored with secret-manager. To do that, follow the prompt `sh configure_enclave.sh`
-    // Answer `y` to `Do you want to use a secret?` and finish.
-    // Then uncomment this code instead to fetch from env var API_KEY, which is fetched from secret manager.
-    let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
+    // This API_KEY value can be stored with secret-manager. To do that, follow the prompt `sh configure_enclave.sh`
+    // Answer `y` to `Do you want to use a secret?` and finish. Otherwise, uncomment this code to use a hardcoded value.
     // let api_key = "045a27812dbe456392913223221306".to_string();
+    #[cfg(not(feature = "seal-example"))]
+    let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
+
+    // NOTE: if built with `seal-example` flag the `process_data` does not use this api_key from AppState, instead
+    // it uses SEAL_API_KEY initialized with two phase bootstrap. Modify this as needed for your application.
+    #[cfg(feature = "seal-example")]
+    let api_key = String::new();
 
     let state = Arc::new(AppState { eph_kp, api_key });
+
+    // Spawn host-only init server if seal-example feature is enabled
+    #[cfg(feature = "seal-example")]
+    {
+        nautilus_server::app::spawn_host_init_server(state.clone()).await?;
+    }
 
     // Define your own restricted CORS policy here if needed.
     let cors = CorsLayer::new().allow_methods(Any).allow_headers(Any);
