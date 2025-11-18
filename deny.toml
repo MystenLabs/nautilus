@@ -28,7 +28,17 @@ ignore = [
     "RUSTSEC-2025-0009",
     # serde_cbor is not maintained but aws-nitro-enclaves-nsm-api depends 
     # on this, this is not used directly
-    "RUSTSEC-2021-0127"
+    "RUSTSEC-2021-0127",
+        "RUSTSEC-2023-0071",
+    # allow unmaintained proc-macro-error used in transitive dependencies (also in Sui)
+    "RUSTSEC-2024-0370",
+    # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*, also in Sui)
+    "RUSTSEC-2024-0384",
+    # allow outdated 'idna' until passkey-client crate is able to update (also in Sui)
+    "RUSTSEC-2024-0421",
+    # allow unmaintained derivative crate used in transitive dependencies (paste, ark-*, also in Sui)
+    "RUSTSEC-2024-0388",
+    "RUSTSEC-2024-0436"
 ]
 
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
