@@ -2,20 +2,12 @@ REGISTRY := local
 
 .DEFAULT_GOAL :=
 .PHONY: default
-default: out/enclaveos.tar
+default: out/nitro.eif
 
 out:
 	mkdir out
 
-out/enclaveos.tar: out \
-	$(shell git ls-files \
-		src/init \
-		src/aws \
-        src/hello \
-	)
-ifndef ENCLAVE_APP
-	$(error ENCLAVE_APP is not set. Please provide ENCLAVE_APP variable, e.g., make ENCLAVE_APP=weather-example)
-endif
+out/nitro.eif: out $(shell git ls-files src)
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \

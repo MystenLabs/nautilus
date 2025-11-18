@@ -86,7 +86,7 @@ jobs:
       - name: rustfmt
         working-directory: src/nautilus-server
         run: cargo fmt --all -- --check
-  
+
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
     runs-on: ubuntu-latest
@@ -96,6 +96,7 @@ jobs:
         with:
           command: check
           arguments: --all-features
+          manifest-path: src/nautilus-server/Cargo.toml
           log-level: warn
         env:
           CARGO_TERM_COLOR: always
