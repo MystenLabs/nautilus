@@ -29,9 +29,9 @@ lazy_static = "1.4"
 uuid = { version = "1.0", features = ["v4"] }
 regex = { version = "1.5", optional = true }
 
-sui-sdk-types = { git = "https://github.com/mystenlabs/sui-rust-sdk", features = ["serde"], rev = "86a9e06", optional = true }
-sui-crypto = { git = "https://github.com/mystenlabs/sui-rust-sdk", features = ["ed25519"], rev = "86a9e06", optional = true }
-seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "608d30caba1d1fbf5f1d82e5a8e6280010fd3609", package = "seal-sdk", optional = true }
+sui-sdk-types = { version = "0.1.0", features = ["serde", "hash"], optional = true }
+sui-crypto = { version = "0.1.0", features = ["ed25519"], optional = true }
+seal-sdk = { git = "https://github.com/MystenLabs/seal", rev = "cdb6ddf104eca6055d69080608da010a83d736bf", package = "seal-sdk", optional = true }
 
 [features]
 weather-example = []

@@ -15,7 +15,7 @@ use seal_sdk::{
     genkey, seal_decrypt_all_objects, signed_message, signed_request, Certificate, ElGamalSecretKey,
 };
 use sui_sdk_types::{
-    Argument, Command, Identifier, Input, MoveCall, ObjectId as ObjectID, PersonalMessage,
+    Address as ObjectID, Argument, Command, Identifier, Input, MoveCall, PersonalMessage,
     ProgrammableTransaction,
 };
 use tokio::sync::RwLock;
@@ -63,7 +63,7 @@ pub async fn init_parameter_load(
     let session_vk = session.public();
     let creation_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| EnclaveError::GenericError(format!("Time error: {}", e)))?
+        .map_err(|e| EnclaveError::GenericError(format!("Time error: {e}")))?
         .as_millis() as u64;
     let ttl_min = 10;
     let message = signed_message(
@@ -88,13 +88,13 @@ pub async fn init_parameter_load(
         sui_private_key
             .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
             .map_err(|e| {
-                EnclaveError::GenericError(format!("Failed to sign personal message: {}", e))
+                EnclaveError::GenericError(format!("Failed to sign personal message: {e}"))
             })?
     };
 
     // Create certificate with enclave's ephemeral key's address and session vk.
     let certificate = Certificate {
-        user: sui_private_key.public_key().to_address(),
+        user: sui_private_key.public_key().derive_address(),
         session_vk: session_vk.clone(),
         creation_time,
         ttl_min,
@@ -110,7 +110,7 @@ pub async fn init_parameter_load(
         request.ids,
     )
     .await
-    .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {}", e)))?;
+    .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {e}")))?;
 
     // Load the encryption public key and verification key.
     let (_enc_secret, enc_key, enc_verification_key) = &*ENCRYPTION_KEYS;
@@ -155,12 +155,12 @@ pub async fn complete_parameter_load(
         &request.encrypted_objects,
         &SEAL_CONFIG.server_pk_map,
     )
-    .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt objects: {}", e)))?;
+    .map_err(|e| EnclaveError::GenericError(format!("Failed to decrypt objects: {e}")))?;
 
     // The first secret is the weather API key, store it.
     if let Some(api_key_bytes) = decrypted_results.first() {
         let api_key_str = String::from_utf8(api_key_bytes.clone())
-            .map_err(|e| EnclaveError::GenericError(format!("Invalid UTF-8 in secret: {}", e)))?;
+            .map_err(|e| EnclaveError::GenericError(format!("Invalid UTF-8 in secret: {e}")))?;
 
         let mut api_key_guard = (*SEAL_API_KEY).write().await;
         *api_key_guard = Some(api_key_str.clone());

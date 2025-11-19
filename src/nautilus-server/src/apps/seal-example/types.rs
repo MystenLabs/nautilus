@@ -8,7 +8,7 @@ use seal_sdk::{EncryptedObject, IBEPublicKey};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
-use sui_sdk_types::ObjectId as ObjectID;
+use sui_sdk_types::Address as ObjectID;
 
 /// Custom deserializer for hex strings to Vec<u8>
 fn deserialize_hex_vec<'de, D>(deserializer: D) -> Result<Vec<KeyId>, D::Error>
