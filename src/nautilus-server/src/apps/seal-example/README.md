@@ -6,21 +6,22 @@ The Seal-Nautilus pattern provides secure secret management for enclave applicat
 
 The enclave can define a Seal policy bounded to an enclave identity configured with specified PCRs. Users can use the enclave identity to encrypt any data using Seal, and only the enclave of the given PCRs can decrypt it. 
 
-Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
+Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we encrypt it using Seal, and show that only the enclave with the expected PCRs is able to decrypt and use it. 
 
 ## Components
 
-1. Nautilus server running inside AWS Nitro Enclave (`src/nautilus-server/src/apps/seal-example`): This is the only place that the Seal secret can be decrypted according to the policy. It exposes the endpoints at port 3000 to the Internet with the `/get_attestation` and `/process_data` endpoints. It also exposes port 3001 to the local host, which can only be used to initialize and complete the bootstrap steps inside the instance that the enclave runs.
+1. Nautilus server running inside AWS Nitro Enclave (`src/nautilus-server/src/apps/seal-example`): This is the only place that the Seal secret can be decrypted according to the policy. It exposes the endpoints at port 3000 to the Internet with the `/get_attestation` and `/process_data` endpoints. It also exposes port 3001 to the local host with 3 `/admin` endpoints, which can only be used to initialize and complete the key load steps on the host instance that the enclave runs.
 
-2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers). 
+2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers).
 
 3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy using the enclave object. 
 
 ## Overview
 
-Admin is someone that has access to the EC2 instance. He can build and run the enclave binary. He can also call the admin only enclave endpoints via localhost on the EC2 instance. 
+> [!NOTE]
+> Admin is someone that has access to the EC2 instance. He can build and run the enclave binary on it. He can also call the admin only enclave endpoints via localhost on the EC2 instance. 
 
-Phase 1: Start and register the server
+Phase 1: Start and Register the Server
 
 1. Admin specifies the `seal_config.yaml` with the published Seal policy package ID and Seal configurations. Then the admin builds and runs the enclave with exposed `/get_attestation` endpoint. 
 
@@ -50,29 +51,21 @@ This delegation is secure because the Seal responses are encrypted under the enc
 
 ## Security Guarantees
 
-The enclave generates an encryption secret key (ElGamal) during initialization and this key never leaves the enclave memory. Seal servers encrypt the secret to the encryption public key, part of the `FetchKeyRequest` returned from `/init_seal_key_load`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse`. The `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify the consistency and decrypt the secret.
+The enclave generates 3 keypairs on startup, all kept only in enclave memory:
 
-The enclave generates three keypairs on startup, all kept only in enclave memory:
-1. Ephemeral application key: Registered on-chain in the Enclave object, used to sign `/process_data` responses.
-2. Seal operations wallet: Used for Seal certificate and PTB signing.
-3. ElGamal encryption key: Used to decrypt Seal responses.
+1. Enclave ephemeral keypair: Registered on-chain in the Enclave object, used to sign `/process_data` responses.
+2. Enclave Seal wallet keypair: Used for Seal certificate and PTB signing.
+3. ElGamal encryption keypair: Used to decrypt Seal responses.
 
-During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate and also signs the application public key as a commitment. This signature is included in the PTB passed to `seal_approve`. When Seal servers dry-run the transaction, `seal_approve` verifies the wallet's signature commits to the registered application public key. This proves that only the enclave (which has access to both keys) could have created this valid commitment, preventing unauthorized key requests.
+During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate and also signs the enclave public key as a commitment. This signature is included in the PTB passed to `seal_approve`. When Seal servers dry-run the transaction, `seal_approve` verifies:
 
-```move
-entry fun seal_approve(id: vector<u8>, signature: &vector<u8>, wallet_pk: &vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
-    assert!(ed25519::ed25519_verify(signature, wallet_pk, enclave.pk()), ENoAccess);
-    assert!(id == enclave.id(), ENoAccess);
-    assert!(ctx.sender().to_bytes() == pk_to_address(wallet_pk), ENoAccess);
-}
-```
+1. The wallet signature is valid over the enclave's public key. 
+2. The key ID matches the enclave's object ID. 
+3. The transaction sender matches the wallet public key. 
 
-The enclave generates a separate wallet keypair that signs the enclave's public key to commit to it. This signature, along with the wallet's public key, is included in the PTB. When Seal servers dry-run the transaction, `seal_approve` verifies:
-1. The wallet signature is valid over the enclave's public key
-2. The key ID matches the enclave's registered ID
-3. The transaction sender matches the wallet's address
+This proves that only the enclave (which has access to both keys) could have created a valid signed PTB. 
 
-This proves the wallet holder has committed to the specific enclave public key registered on-chain. 
+During `/init_seal_key_load`, the enclave also generates an encryption key and return the encryption public key as part of `FetchKeyRequest`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse` since it does not have the encryption secret key. Then the `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify the consistency and decrypt the secret in memory. 
 
 ## Steps
 
@@ -85,15 +78,17 @@ This is the same as the Nautilus template. Refer to the main guide for more deta
 cd move/enclave
 sui move build && sui client publish
 
-ENCLAVE_PACKAGE_ID=0xe796d3cccaeaa5fd615bd1ac2cc02c37077471b201722f66bb131712a86f4ab6
+# find this in output and set env var. 
+ENCLAVE_PACKAGE_ID=0xc664c812bfce5b8ade4243da3d91fc529ac488f79f7f7bf2e0e7c4fd887a2433
 
 # publish the app package
 cd move/seal-example
 sui move build && sui client publish
 
-CAP_OBJECT_ID=0x55bb39cf70fb646ef4b008fd8e4195a4753e6af1817df830f26215178c4a6cf3
-ENCLAVE_CONFIG_OBJECT_ID=0x57af8a8bde16bc99966d257765d1097a74ad36fb4c4cb632669e34224345b317
-APP_PACKAGE_ID=0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d8
+# find these in output and set env var. 
+CAP_OBJECT_ID=0xa4a0ea418c1107a9d9ae2ff03dfaea5826cf6a419ee92f93988ec3c02d03c098
+ENCLAVE_CONFIG_OBJECT_ID=0xcd4a3253cbe065c776ab5b9ef781f0b9ba9bb6f150c39e5caa8c90464539e0e7
+APP_PACKAGE_ID=0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0
 # update seal_config.yaml with APP_PACKAGE_ID inside the enclave
 
 # in the enclave: build, run and expose
