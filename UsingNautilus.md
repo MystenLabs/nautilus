@@ -115,7 +115,7 @@ For the Twitter example, this secret value refers to the API Bearer Token associ
 
 ```shell
 cd nautilus/
-make make run ENCLAVE_APP=<APP> # this builds the enclave and runs it, e.g. `make run ENCLAVE_APP=weather-example`
+make run ENCLAVE_APP=<APP> # this builds the enclave and runs it, e.g. `make run ENCLAVE_APP=weather-example`
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
@@ -191,13 +191,10 @@ cd nautilus/
 make ENCLAVE_APP=weather-example
 
 cat out/nitro.pcrs
-911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
-911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
-21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 
-# Add env var that will be used later when registering the enclave.
-PCR0=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
-PCR1=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
+# add env var that will be used later when registering the enclave.
+PCR0=14245f411c034ca453c7afcc666007919ca618da943e5a78823819e9bcee2084c4d9f582a3d4c99beb80ad1c3ea290f7
+PCR1=14245f411c034ca453c7afcc666007919ca618da943e5a78823819e9bcee2084c4d9f582a3d4c99beb80ad1c3ea290f7
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 ```
 
@@ -274,9 +271,6 @@ cd nautilus/
 make ENCLAVE_APP=twitter-example
 
 cat out/nitro.pcrs
-968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR0
-968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR1
-21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 
 # Add env var that will be used later when registering the enclave.
 PCR0=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
