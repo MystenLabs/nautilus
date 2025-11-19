@@ -681,5 +681,5 @@ echo "[*] Commit the code generated in expose_enclave.sh and src/nautilus-server
 echo "[*] Please wait 2-3 minutes for the instance to finish the init script before sshing into it."
 echo "[*] ssh inside the launched EC2 instance. e.g. \`ssh ec2-user@\"$PUBLIC_IP\"\` assuming the ssh-key is loaded into the agent."
 echo "[*] Clone or copy the repo with the above generated code."
-echo "[*] Inside repo directory: 'make run ENCLAVE_APP=<APP>'"
+echo "[*] Inside repo directory: 'make ENCLAVE_APP=<APP>' and then 'make run'"
 echo "[*] Run expose_enclave.sh from within the EC2 instance to expose the enclave to the internet."
