@@ -451,9 +451,9 @@ dependencies = [
 
 [[package]]
 name = "bnum"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f781dba93de3a5ef6dc5b17c9958b208f6f3f021623b360fb605ea51ce443f10"
+checksum = "119771309b95163ec7aaf79810da82f7cd0599c19722d48b9c03894dca833966"
 
 [[package]]
 name = "bs58"
@@ -493,6 +493,15 @@ name = "bytes"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
+
+[[package]]
+name = "bytestring"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "113b4343b5f6617e7ad401ced8de3cc8b012e73a594347c307b90db3e9271289"
+dependencies = [
+ "bytes",
+]
 
 [[package]]
 name = "cbc"
@@ -582,8 +591,8 @@ dependencies = [
 
 [[package]]
 name = "crypto"
-version = "0.5.11"
-source = "git+https://github.com/MystenLabs/seal?rev=608d30caba1d1fbf5f1d82e5a8e6280010fd3609#608d30caba1d1fbf5f1d82e5a8e6280010fd3609"
+version = "0.5.13"
+source = "git+https://github.com/MystenLabs/seal?rev=cdb6ddf104eca6055d69080608da010a83d736bf#cdb6ddf104eca6055d69080608da010a83d736bf"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -2170,9 +2179,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.10.12"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19e8d2cfa184d94d0726d650a9f4a1be7f9b76ac9fdb954219878dc00c1c1e7b"
+checksum = "f08d6a905edb32d74a5d5737a0c9d7e950c312f3c46cb0ca0a2ca09ea11878a0"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -2307,8 +2316,8 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "seal-sdk"
-version = "0.5.11"
-source = "git+https://github.com/MystenLabs/seal?rev=608d30caba1d1fbf5f1d82e5a8e6280010fd3609#608d30caba1d1fbf5f1d82e5a8e6280010fd3609"
+version = "0.5.13"
+source = "git+https://github.com/MystenLabs/seal?rev=cdb6ddf104eca6055d69080608da010a83d736bf#cdb6ddf104eca6055d69080608da010a83d736bf"
 dependencies = [
  "bcs",
  "chrono",
@@ -2684,8 +2693,9 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui-crypto"
-version = "0.0.2"
-source = "git+https://github.com/mystenlabs/sui-rust-sdk?rev=86a9e06#86a9e06cde84671e96e776d926a85fc1f229314d"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7129cfd679e3f2c0e6a163c706c926d14900fd2e05d29529175e34644850b4d5"
 dependencies = [
  "ed25519-dalek",
  "rand_core",
@@ -2695,15 +2705,18 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.2"
-source = "git+https://github.com/mystenlabs/sui-rust-sdk?rev=86a9e06#86a9e06cde84671e96e776d926a85fc1f229314d"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df9497600faf5a1fb07a2db85902515867ad30474abf959de1a7d1fa473c4a28"
 dependencies = [
  "base64ct",
  "bcs",
  "blake2",
  "bnum",
  "bs58 0.5.1",
- "hex",
+ "bytes",
+ "bytestring",
+ "itertools 0.14.0",
  "roaring",
  "serde",
  "serde_derive",
@@ -3451,9 +3464,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
-version = "0.6.26"
+version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+checksum = "21a0236b59786fed61e2a80582dd500fe61f18b5dca67a4a067d0bc9039339cf"
 dependencies = [
  "memchr",
 ]

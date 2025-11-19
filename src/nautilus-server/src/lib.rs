@@ -66,7 +66,7 @@ pub enum EnclaveError {
 impl fmt::Display for EnclaveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnclaveError::GenericError(e) => write!(f, "{}", e),
+            EnclaveError::GenericError(e) => write!(f, "{e}"),
         }
     }
 }

@@ -38,7 +38,7 @@ pub async fn process_data(
 
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {e}")))?
         .as_millis() as u64;
     // Fetch tweet content
     let (twitter_name, sui_address) = fetch_tweet_content(&state.api_key, &user_url).await?;
@@ -70,14 +70,13 @@ async fn fetch_tweet_content(
 
         // Construct the Twitter API URL
         let url = format!(
-            "https://api.twitter.com/2/tweets/{}?expansions=author_id&user.fields=username",
-            tweet_id
+            "https://api.twitter.com/2/tweets/{tweet_id}?expansions=author_id&user.fields=username"
         );
 
         // Make the request to Twitter API
         let response = client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {api_key}"))
             .send()
             .await
             .map_err(|_| {
@@ -91,7 +90,7 @@ async fn fetch_tweet_content(
 
         // Extract tweet text and author username
         let tweet_text = response["data"]["text"].as_str().ok_or_else(|| {
-            EnclaveError::GenericError(format!("Failed to extract tweet text {}", response))
+            EnclaveError::GenericError(format!("Failed to extract tweet text {response}"))
         })?;
 
         let twitter_name = response["includes"]["users"]
@@ -135,13 +134,12 @@ async fn fetch_tweet_content(
 
         // Fetch user profile
         let url = format!(
-            "https://api.twitter.com/2/users/by/username/{}?user.fields=description",
-            username
+            "https://api.twitter.com/2/users/by/username/{username}?user.fields=description"
         );
 
         let response = client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {api_key}"))
             .send()
             .await
             .map_err(|_| {
