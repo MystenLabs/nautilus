@@ -12,16 +12,16 @@ use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::groups::bls12381::G1Element;
 use fastcrypto::traits::{KeyPair, Signer, ToFromBytes};
 use rand::thread_rng;
-use seal_sdk::types::{ElGamalPublicKey, ElgamalVerificationKey, FetchKeyRequest, KeyId};
+use seal_sdk::types::{ElGamalPublicKey, ElgamalVerificationKey, FetchKeyRequest};
 use seal_sdk::{
     decrypt_seal_responses, genkey, seal_decrypt_object, signed_message, signed_request,
     Certificate, ElGamalSecretKey,
 };
+use sui_crypto::ed25519::Ed25519PrivateKey;
 use sui_sdk_types::{
     Address, Argument, Command, Identifier, Input, MoveCall, PersonalMessage,
     ProgrammableTransaction,
 };
-use sui_crypto::ed25519::Ed25519PrivateKey;
 use tokio::sync::RwLock;
 
 use super::types::*;
@@ -114,7 +114,6 @@ pub async fn init_seal_key_load(
         SEAL_CONFIG.package_id,
         request.enclave_object_id,
         request.initial_shared_version,
-        request.id,
         enclave_pk,
     )
     .await
@@ -145,7 +144,7 @@ pub async fn init_seal_key_load(
 pub async fn complete_seal_key_load(
     State(_state): State<Arc<AppState>>,
     Json(request): Json<CompleteKeyLoadRequest>,
-) -> Result<Json<()>, EnclaveError> {
+) -> Result<Json<CompleteKeyLoadResponse>, EnclaveError> {
     // Decrypt ALL keys from ALL servers and cache them
     let (enc_secret, _enc_key, _enc_verification_key) = &*ENCRYPTION_KEYS;
     let seal_keys = decrypt_seal_responses(
@@ -158,7 +157,9 @@ pub async fn complete_seal_key_load(
     // Cache the keys for later use.
     CACHED_KEYS.write().await.extend(seal_keys);
 
-    Ok(Json(()))
+    Ok(Json(CompleteKeyLoadResponse {
+        status: "OK".to_string(),
+    }))
 }
 
 /// This endpoint decrypts a weather API key using cached keys from the complete_key_load phase.
@@ -167,7 +168,7 @@ pub async fn complete_seal_key_load(
 pub async fn provision_weather_api_key(
     State(_state): State<Arc<AppState>>,
     Json(request): Json<ProvisionWeatherApiRequest>,
-) -> Result<Json<()>, EnclaveError> {
+) -> Result<Json<ProvisionWeatherApiResponse>, EnclaveError> {
     // Decrypt the encrypted object using cached keys.
     let cached_keys_read = CACHED_KEYS.read().await;
     let api_key_bytes = seal_decrypt_object(
@@ -185,7 +186,9 @@ pub async fn provision_weather_api_key(
     let mut api_key_guard = (*SEAL_API_KEY).write().await;
     *api_key_guard = Some(api_key_str);
 
-    Ok(Json(()))
+    Ok(Json(ProvisionWeatherApiResponse {
+        status: "OK".to_string(),
+    }))
 }
 
 /// Helper function that creates a PTB with a single seal_approve command for the given ID and the
@@ -195,7 +198,6 @@ async fn create_ptb(
     package_id: Address,
     enclave_object_id: Address,
     initial_shared_version: u64,
-    id: KeyId,
     enclave_pk: Vec<u8>,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     let mut inputs = vec![];
@@ -207,12 +209,9 @@ async fn create_ptb(
     let signature = wallet.sign(&enclave_pk).as_bytes().to_vec();
     let wallet_pk = wallet.public().as_bytes().to_vec();
 
-    println!("Enclave PK: {}", Hex::encode(&enclave_pk));
-    println!("Signature: {}", Hex::encode(&signature));
-    println!("Wallet PK: {}", Hex::encode(&wallet_pk));
     // Input 0: ID.
     inputs.push(Input::Pure {
-        value: bcs::to_bytes(&id)?,
+        value: bcs::to_bytes(&enclave_object_id)?,
     });
 
     // Input 1: signature.

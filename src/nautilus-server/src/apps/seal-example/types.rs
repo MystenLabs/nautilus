@@ -3,21 +3,12 @@
 
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::serde_helpers::ToFromByteArray;
-use seal_sdk::types::{FetchKeyResponse, KeyId};
+use seal_sdk::types::FetchKeyResponse;
 use seal_sdk::{EncryptedObject, IBEPublicKey};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 use sui_sdk_types::Address;
-
-/// Custom deserializer for hex string to Vec<u8>
-fn deserialize_hex<'de, D>(deserializer: D) -> Result<KeyId, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex_string: String = String::deserialize(deserializer)?;
-    Hex::decode(&hex_string).map_err(serde::de::Error::custom)
-}
 
 /// Custom deserializer for hex string to Address (for object IDs)
 fn deserialize_object_id<'de, D>(deserializer: D) -> Result<Address, D::Error>
@@ -140,8 +131,6 @@ impl TryFrom<SealConfigRaw> for SealConfig {
 pub struct InitKeyLoadRequest {
     pub enclave_object_id: Address,
     pub initial_shared_version: u64,
-    #[serde(deserialize_with = "deserialize_hex")]
-    pub id: KeyId,
 }
 
 /// Response for /init_seal_key_load
@@ -157,9 +146,21 @@ pub struct CompleteKeyLoadRequest {
     pub seal_responses: Vec<(Address, FetchKeyResponse)>,
 }
 
+/// Response for /complete_seal_key_load
+#[derive(Serialize, Deserialize)]
+pub struct CompleteKeyLoadResponse {
+    pub status: String,
+}
+
 /// Request for /provision_weather_api_key
 #[derive(Serialize, Deserialize)]
 pub struct ProvisionWeatherApiRequest {
     #[serde(deserialize_with = "deserialize_encrypted_object")]
     pub encrypted_object: EncryptedObject,
+}
+
+/// Response for /provision_weather_api_key
+#[derive(Serialize, Deserialize)]
+pub struct ProvisionWeatherApiResponse {
+    pub status: String,
 }
