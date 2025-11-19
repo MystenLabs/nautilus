@@ -21,6 +21,7 @@ use sui_sdk_types::{
     Address, Argument, Command, Identifier, Input, MoveCall, PersonalMessage,
     ProgrammableTransaction,
 };
+use sui_crypto::ed25519::Ed25519PrivateKey;
 use tokio::sync::RwLock;
 
 use super::types::*;
@@ -85,7 +86,7 @@ pub async fn init_seal_key_load(
     );
 
     // Load enclave wallet and convert to sui-crypto for signing.
-    let sui_wallet = sui_crypto::ed25519::Ed25519PrivateKey::new(*ENCLAVE_WALLET_BYTES);
+    let sui_wallet = Ed25519PrivateKey::new(*ENCLAVE_WALLET_BYTES);
 
     // Sign personal message.
     let signature = {
@@ -206,6 +207,9 @@ async fn create_ptb(
     let signature = wallet.sign(&enclave_pk).as_bytes().to_vec();
     let wallet_pk = wallet.public().as_bytes().to_vec();
 
+    println!("Enclave PK: {}", Hex::encode(&enclave_pk));
+    println!("Signature: {}", Hex::encode(&signature));
+    println!("Wallet PK: {}", Hex::encode(&wallet_pk));
     // Input 0: ID.
     inputs.push(Input::Pure {
         value: bcs::to_bytes(&id)?,
