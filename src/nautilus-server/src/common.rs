@@ -145,7 +145,7 @@ pub async fn health_check(
     let client = Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to create HTTP client: {}", e)))?;
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to create HTTP client: {e}")))?;
 
     // Load allowed endpoints from YAML file
     let endpoints_status = match std::fs::read_to_string("allowed_endpoints.yaml") {
@@ -161,9 +161,9 @@ pub async fn health_check(
                             if let Some(endpoint_str) = endpoint.as_str() {
                                 // Check connectivity to each endpoint
                                 let url = if endpoint_str.contains(".amazonaws.com") {
-                                    format!("https://{}/ping", endpoint_str)
+                                    format!("https://{endpoint_str}/ping")
                                 } else {
-                                    format!("https://{}", endpoint_str)
+                                    format!("https://{endpoint_str}")
                                 };
 
                                 let is_reachable = match client.get(&url).send().await {

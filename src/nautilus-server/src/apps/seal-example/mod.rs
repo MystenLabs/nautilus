@@ -4,7 +4,7 @@
 pub mod endpoints;
 pub mod types;
 
-pub use endpoints::{complete_parameter_load, init_parameter_load};
+pub use endpoints::{complete_seal_key_load, init_seal_key_load, provision_weather_api_key};
 pub use types::*;
 
 use crate::app::endpoints::SEAL_API_KEY;
@@ -47,11 +47,11 @@ pub async fn process_data(
         "https://api.weatherapi.com/v1/current.json?key={}&q={}",
         api_key, request.payload.location
     );
-    let response = reqwest::get(url.clone()).await.map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to get weather response: {}", e))
-    })?;
+    let response = reqwest::get(url.clone())
+        .await
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to get weather response: {e}")))?;
     let json = response.json::<Value>().await.map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to parse weather response: {}", e))
+        EnclaveError::GenericError(format!("Failed to parse weather response: {e}"))
     })?;
     let location = json["location"]["name"].as_str().unwrap_or("Unknown");
     let temperature = json["current"]["temp_c"].as_f64().unwrap_or(0.0) as u64;
@@ -59,7 +59,7 @@ pub async fn process_data(
     let last_updated_timestamp_ms = last_updated_epoch * 1000_u64;
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {}", e)))?
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to get current timestamp: {e}")))?
         .as_millis() as u64;
 
     // 1 hour in milliseconds = 60 * 60 * 1000 = 3_600_000
@@ -105,16 +105,20 @@ pub async fn ping() -> Json<PingResponse> {
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/ping", get(ping))
-        .route("/seal/init_parameter_load", post(init_parameter_load))
+        .route("/admin/init_seal_key_load", post(init_seal_key_load))
         .route(
-            "/seal/complete_parameter_load",
-            post(complete_parameter_load),
+            "/admin/complete_seal_key_load",
+            post(complete_seal_key_load),
+        )
+        .route(
+            "/admin/provision_weather_api_key",
+            post(provision_weather_api_key),
         )
         .with_state(state);
 
-    let host_listener = TcpListener::bind("0.0.0.0:3001").await.map_err(|e| {
-        EnclaveError::GenericError(format!("Failed to bind host init server: {}", e))
-    })?;
+    let host_listener = TcpListener::bind("0.0.0.0:3001")
+        .await
+        .map_err(|e| EnclaveError::GenericError(format!("Failed to bind host init server: {e}")))?;
 
     info!(
         "Host-only init server listening on {}",
