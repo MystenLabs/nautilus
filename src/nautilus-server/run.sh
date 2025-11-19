@@ -22,6 +22,8 @@ busybox ip link set dev lo up
 
 # Add a hosts record, pointing target site calls to local loopback
 echo "127.0.0.1   localhost" > /etc/hosts
+echo "127.0.0.64   api.weatherapi.com" >> /etc/hosts
+
 
 
 # == ATTENTION: code should be generated here that parses allowed_endpoints.yaml and populate domains here ===
@@ -41,8 +43,13 @@ echo "$JSON_RESPONSE" | jq -r 'to_entries[] | "\(.key)=\(.value)"' > /tmp/kvpair
 
 # == ATTENTION: code should be generated here that added all hosts to forward traffic ===
 # Traffic-forwarder-block
+python3 /traffic_forwarder.py 127.0.0.64 443 3 8101 &
+
 
 # Listens on Local VSOCK Port 3000 and forwards to localhost 3000
 socat VSOCK-LISTEN:3000,reuseaddr,fork TCP:localhost:3000 &
+
+# For seal-example: Listen on VSOCK Port 3001 and forward to localhost 3001
+socat VSOCK-LISTEN:3001,reuseaddr,fork TCP:localhost:3001 &
 
 /nautilus-server
