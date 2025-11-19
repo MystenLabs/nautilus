@@ -144,6 +144,10 @@ public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
 }
 
+public fun id<T>(enclave: &Enclave<T>): vector<u8> {
+    enclave.id.to_bytes()
+}
+
 public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
     assert!(e.config_version < config.version, EInvalidConfigVersion);
     let Enclave { id, .. } = e;

@@ -2,7 +2,11 @@
 
 This example is currently WIP. Use it as a reference only. 
 
-The Seal-Nautilus pattern provides secure secret management for enclave applications, ensuring the Seal secret is only accessible within the attested enclaves. Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
+The Seal-Nautilus pattern provides secure secret management for enclave applications, where user can encrypt any secrets to the enclave binary. 
+
+The enclave can define a Seal policy bounded to an enclave identity configured with specified PCRs. Users can use the enclave identity to encrypt any data using Seal, and only the enclave of the given PCRs can decrypt it. 
+
+Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we store it with Seal, and show that only the enclave with the expected PCRs has access to it. 
 
 ## Components
 
@@ -14,34 +18,45 @@ The Seal-Nautilus pattern provides secure secret management for enclave applicat
 
 ## Overview
 
+Admin is someone that has access to the EC2 instance. He can build and run the enclave binary. He can also call the admin only enclave endpoints via localhost on the EC2 instance. 
+
 Phase 1: Start and register the server
 
-1. The admin specifies the `seal_config.yaml` with the published Seal policy package ID and Seal configurations. Then the admin builds and runs the enclave with exposed `/get_attestation` endpoint. 
+1. Admin specifies the `seal_config.yaml` with the published Seal policy package ID and Seal configurations. Then the admin builds and runs the enclave with exposed `/get_attestation` endpoint. 
+
 2. Admin uses the attestation response to register PCRs and the enclave public key. The `/process_data` endpoint currently returns an error because the `SEAL_API_KEY` is not yet initialized.
+
 3. Admin registers the enclave on-chain and get enclave object ID and initial shared version. 
 
-Phase 2: Bootstrap the secret in two steps
+Phase 2: Initialize and Complete Key Load
 
-1. Admin encrypts the secret with a specified key ID. This can be done for multiple secrets with different IDs. 
-2. Host calls `/init_parameter_load` with the enclave object and a list of key IDs used for encryption. Enclave returns the encoded `FetchKeyRequest`.
-3. Admin uses CLI to fetch encrypted keys from Seal servers to get Seal responses. 
-4. Host calls `/complete_parameter_load` with all encrypted objects from step 1 and the Seal responses from step 3. Enclave decrypts the secret(s) and initializes `SEAL_API_KEY`. 
-5. Enclave can now serve `/process_data` requests. 
+4. Admin calls `seal/init_key_load` with the enclave object. Enclave returns the encoded `FetchKeyRequest` containing the enclave public key. 
+
+5. Admin uses FetchKeyRequest to call CLI to get Seal responses, encrypted under the enclave public key. 
+
+6. Admin calls `seal/complete_key_load` with seal responses. Enclave decrypts the Seal key and keep it in memory. 
+
+Phase 3: Load Any Application Secrets
+
+7. Now that Seal key is loaded fully, any secrets can be encrypted with Seal to the enclave identity, then can be provisioned to the enclave using an application specific endpoint. In this example, this is `seal/provision_weather_api_key`. 
+
+8. Enclave can now serve `/process_data` requests. 
 
 ### Why bootstrap requires two steps?
 
-This is because an enclave operates without direct internet access so it cannot fetch secrets from Seal key servers' http endpoints themselves. Here we use the host acts as an intermediary to fetch encrypted secrets from Seal servers. 
+This is because an enclave operates without direct internet access so it cannot fetch secrets from Seal key servers' HTTP endpoints directly. Here we use the host acts as an intermediary to fetch encrypted secrets from Seal servers. 
 
 This delegation is secure because the Seal responses are encrypted under the enclave's encryption key, so only the enclave can later decrypt the fetched Seal responses. The enclave is also initialized with the public keys of the Seal servers in `seal_config.yaml`, which can be used to verify the decrypted secrets are not tampered with.
 
 ## Security Guarantees
 
-The enclave generates an encryption secret key during initialization and this key never leaves the enclave memory. Seal servers encrypt the secret to the encryption public key, part of the `FetchKeyRequest` returned from `/init_parameter_load`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse`. The `FetchKeyResponse` is passed to the enclave at `/complete_parameter_load`, and only the enclave can verify the consistency and decrypt the secret. 
+The enclave generates an encryption secret key during initialization and this key never leaves the enclave memory. Seal servers encrypt the secret to the encryption public key, part of the `FetchKeyRequest` returned from `/init_key_load`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse`. The `FetchKeyResponse` is passed to the enclave at `/complete_key_load`, and only the enclave can verify the consistency and decrypt the secret. 
 
-Recall that the enclave also generates an ephemeral secret key on startup, that is only accessible in the enclave memory. The on-chain `seal_approve` function verifies the transaction sender is consistent with the enclave's registered ephemeral public key. During `/init_parameter_load`, a signature is created using the ephemeral secret key, committed over the PTB containing the Seal policy. As part of the `FetchKeyRequest`, this signature is later verified when Seal servers dry run the transaction. This ensures only the enclave can produce such signatures that can result in successful Seal responses.
+Recall that the enclave also generates an ephemeral secret key on startup, that is only accessible in the enclave memory. The on-chain `seal_approve` function verifies the transaction sender is consistent with the enclave's registered ephemeral public key. During `/init_key_load`, a signature is created using the ephemeral secret key, committed over the PTB containing the Seal policy. As part of the `FetchKeyRequest`, this signature is later verified when Seal servers dry run the transaction. This ensures only the enclave can produce such signatures that can result in successful Seal responses.
 
 ```move
 entry fun seal_approve<T: drop>(_id: vector<u8>, enclave: &Enclave<T>, ctx: &TxContext) {
+    assert!(id == enclave.id(), EInvalidIdentity);
     assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
 }
 
@@ -124,7 +139,7 @@ This command looks up the public keys of the specified key servers ID using publ
 # in seal repo
 APP_PACKAGE_ID=0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d8
 cargo run --bin seal-cli encrypt --secrets 303435613237383132646265343536333932393133323233323231333036,0101 \
-    --ids 0000,0001 \
+    --id xx \
     -p $APP_PACKAGE_ID \
     -t 2 \
     -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
@@ -187,16 +202,21 @@ This step is done in the host that the enclave runs in, that can communicate to 
 curl -X POST http://localhost:3001/seal/complete_parameter_load \
   -H "Content-Type: application/json" \
   -d '{
-    "encrypted_objects": "<ENCRYPTED_OBJECT>",
     "seal_responses": "<ENCODED_SEAL_RESPONSES>"
   }'
-
-{"dummy_secrets":[[1,1]]}
 ```
 
-In this call, the enclave uses its ephemeral secret key to decrypt key shares and performs threshold decryption to recover the secrets. Then the enclave finishes the bootstrap phase by storing the decrypted secret `SEAL_API_KEY` in memory.
+### Step 5: Provision Any Encrypted Objects
 
-### Step 5: Use the Service
+```bash
+curl -X POST http://localhost:3001/seal/provision_api_key \
+  -H "Content-Type: application/json" \
+  -d '{
+    "encrypted_object": "<ENCODED_OBJECT>"
+  }'
+```
+
+### Step 6: Use the Service
 
 Now the enclave server is fully functional to process data. 
 

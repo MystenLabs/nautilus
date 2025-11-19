@@ -7,10 +7,12 @@ module seal_policy_example::seal_policy {
     use sui::hash::blake2b256;
 
     const ENoAccess: u64 = 0;
-
-    entry fun seal_approve(_id: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
+    const EInvalidIdentity: u64 = 1;
+    
+    entry fun seal_approve(id: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
         // In this example whether the enclave is the latest version is not checked. One
         // can pass EnclaveConfig as an argument and check config_version if needed.
+        assert!(id == enclave.id(), EInvalidIdentity);
         assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
     }
 
