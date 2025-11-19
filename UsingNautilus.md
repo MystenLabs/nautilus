@@ -41,9 +41,6 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
   /weather-example  Entry point for onchain logic as an example, which uses enclave functions to run your Nautilus application logic.
   /twitter-example  Entry point for onchain logic as another example, which uses enclave functions to run your Nautilus application logic. 
 /src
-  /aws              AWS boilerplate — use as-is without modification.
-  /init             AWS boilerplate — use as-is without modification.
-  /system           AWS boilerplate — use as-is without modification.
   /nautilus-server  Nautilus server that runs inside the enclave.
     /src
       /apps
@@ -118,12 +115,12 @@ For the Twitter example, this secret value refers to the API Bearer Token associ
 
 ```shell
 cd nautilus/
-make ENCLAVE_APP=<APP> && make run # this builds the enclave and runs it, e.g. `make ENCLAVE_APP=weather-example`
+make make run ENCLAVE_APP=<APP> # this builds the enclave and runs it, e.g. `make run ENCLAVE_APP=weather-example`
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
 > [!NOTE]
-> Use `make run-debug` instead of `make run` to run the enclave in debug mode. This will print all logs, which the production build does not. Note that in debug mode, the PCR values will be all zeros and are not valid for production use.
+> Use `make run-debug ENCLAVE_APP=<APP>` instead of `make run ENCLAVE_APP=<APP>` to run the enclave in debug mode. This will print all logs, which the production build does not. Note that in debug mode, the PCR values will be all zeros and are not valid for production use.
 
 7. Congratulations! You can now interact with the enclave from the outside world. You can find the `PUBLIC_IP` in the AWS console.
 

@@ -78,7 +78,7 @@ APP_PACKAGE_ID=0x82dc1ccc20ec94e7966299aa4398d9fe0333ab5c138dee5f81924b7b59ec48d
 # update seal_config.yaml with APP_PACKAGE_ID inside the enclave
 
 # in the enclave: build, run and expose
-make ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
+make run ENCLAVE_APP=seal-example && sh expose_enclave.sh
 
 # record the pcrs 
 cat out/nitro.pcrs
