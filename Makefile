@@ -5,9 +5,9 @@ REGISTRY := local
 default: out/nitro.eif
 
 out:
-	mkdir out
+	mkdir -p out
 
-out/nitro.eif: out $(shell git ls-files src)
+out/nitro.eif: $(shell git ls-files src) | out
 	docker build \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
