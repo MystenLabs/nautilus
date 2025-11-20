@@ -41,9 +41,6 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
   /weather-example  Entry point for onchain logic as an example, which uses enclave functions to run your Nautilus application logic.
   /twitter-example  Entry point for onchain logic as another example, which uses enclave functions to run your Nautilus application logic. 
 /src
-  /aws              AWS boilerplate — use as-is without modification.
-  /init             AWS boilerplate — use as-is without modification.
-  /system           AWS boilerplate — use as-is without modification.
   /nautilus-server  Nautilus server that runs inside the enclave.
     /src
       /apps
@@ -118,12 +115,12 @@ For the Twitter example, this secret value refers to the API Bearer Token associ
 
 ```shell
 cd nautilus/
-make ENCLAVE_APP=<APP> && make run # this builds the enclave and runs it, e.g. `make ENCLAVE_APP=weather-example`
+make run ENCLAVE_APP=<APP> # this builds the enclave and runs it, e.g. `make run ENCLAVE_APP=weather-example`
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```
 
 > [!NOTE]
-> Use `make run-debug` instead of `make run` to run the enclave in debug mode. This will print all logs, which the production build does not. Note that in debug mode, the PCR values will be all zeros and are not valid for production use.
+> Use `make run-debug ENCLAVE_APP=<APP>` instead of `make run ENCLAVE_APP=<APP>` to run the enclave in debug mode. This will print all logs, which the production build does not. Note that in debug mode, the PCR values will be all zeros and are not valid for production use.
 
 7. Congratulations! You can now interact with the enclave from the outside world. You can find the `PUBLIC_IP` in the AWS console.
 
@@ -194,13 +191,10 @@ cd nautilus/
 make ENCLAVE_APP=weather-example
 
 cat out/nitro.pcrs
-911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
-911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
-21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 
-# Add env var that will be used later when registering the enclave.
-PCR0=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
-PCR1=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
+# add env var that will be used later when registering the enclave.
+PCR0=14245f411c034ca453c7afcc666007919ca618da943e5a78823819e9bcee2084c4d9f582a3d4c99beb80ad1c3ea290f7
+PCR1=14245f411c034ca453c7afcc666007919ca618da943e5a78823819e9bcee2084c4d9f582a3d4c99beb80ad1c3ea290f7
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 ```
 
@@ -277,13 +271,10 @@ cd nautilus/
 make ENCLAVE_APP=twitter-example
 
 cat out/nitro.pcrs
-968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR0
-968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR1
-21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
 
 # Add env var that will be used later when registering the enclave.
-PCR0=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
-PCR1=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
+PCR0=18ae33028ded7643ab797342ec47b74f0efc7a690f7cb848db580e8851279fc4a4ef35816c51e8382aa358ef8e94781d
+PCR1=18ae33028ded7643ab797342ec47b74f0efc7a690f7cb848db580e8851279fc4a4ef35816c51e8382aa358ef8e94781d
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 
 MODULE_NAME=twitter
