@@ -5,13 +5,16 @@ module seal_policy_example::seal_policy {
     use enclave::enclave::Enclave;
     use seal_policy_example::weather::WEATHER;
     use sui::hash::blake2b256;
+    use sui::ed25519;
 
     const ENoAccess: u64 = 0;
 
-    entry fun seal_approve(_id: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
+    entry fun seal_approve(id: vector<u8>, signature: vector<u8>, wallet_pk: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
         // In this example whether the enclave is the latest version is not checked. One
         // can pass EnclaveConfig as an argument and check config_version if needed.
-        assert!(ctx.sender().to_bytes() == pk_to_address(enclave.pk()), ENoAccess);
+        assert!(ed25519::ed25519_verify(&signature, &wallet_pk, enclave.pk()), ENoAccess);
+        assert!(id == enclave.id(), ENoAccess);
+        assert!(ctx.sender().to_bytes() == pk_to_address(&wallet_pk), ENoAccess);
     }
 
     fun pk_to_address(pk: &vector<u8>): vector<u8> {

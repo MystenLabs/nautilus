@@ -4,7 +4,7 @@
 pub mod endpoints;
 pub mod types;
 
-pub use endpoints::{complete_parameter_load, init_parameter_load};
+pub use endpoints::{complete_seal_key_load, init_seal_key_load, provision_weather_api_key};
 pub use types::*;
 
 use crate::app::endpoints::SEAL_API_KEY;
@@ -39,7 +39,7 @@ pub async fn process_data(
     let api_key_guard = SEAL_API_KEY.read().await;
     let api_key = api_key_guard.as_ref().ok_or_else(|| {
         EnclaveError::GenericError(
-            "API key not initialized. Please complete parameter load first.".to_string(),
+            "API key not initialized. Please complete key load first.".to_string(),
         )
     })?;
 
@@ -105,10 +105,14 @@ pub async fn ping() -> Json<PingResponse> {
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/ping", get(ping))
-        .route("/seal/init_parameter_load", post(init_parameter_load))
+        .route("/admin/init_seal_key_load", post(init_seal_key_load))
         .route(
-            "/seal/complete_parameter_load",
-            post(complete_parameter_load),
+            "/admin/complete_seal_key_load",
+            post(complete_seal_key_load),
+        )
+        .route(
+            "/admin/provision_weather_api_key",
+            post(provision_weather_api_key),
         )
         .with_state(state);
 
