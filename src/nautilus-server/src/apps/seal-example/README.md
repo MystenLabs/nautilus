@@ -31,7 +31,7 @@ Phase 1: Start and Register the Server
 
 Phase 2: Initialize and Complete Key Load
 
-4. Admin calls `/admin/init_seal_key_load` with the enclave object and key ID. Enclave returns the encoded `FetchKeyRequest` containing the enclave's encryption public key (ElGamal).
+4. Admin calls `/admin/init_seal_key_load` with the enclave object and key ID. Enclave returns an encoded `FetchKeyRequest`.
 
 5. Admin uses FetchKeyRequest to call CLI to get Seal responses, encrypted under the enclave's encryption public key.
 
@@ -39,7 +39,7 @@ Phase 2: Initialize and Complete Key Load
 
 Phase 3: Provision Application Secrets
 
-7. Now that Seal keys are cached, encrypted objects can be decrypted on-demand using the cached keys. Admin calls `/admin/provision_weather_api_key` with the encrypted weather API key object. The enclave decrypts it using the cached keys and stores it as `SEAL_API_KEY`. 
+7. Now that Seal keys are cached, encrypted objects can be decrypted on-demand using the cached keys. Specifically for our example, Admin calls `/admin/provision_weather_api_key` with the encrypted weather API key object. The enclave decrypts it using the cached keys and stores it as `SEAL_API_KEY`. 
 
 8. Enclave can now serve `/process_data` requests. 
 
@@ -246,7 +246,7 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ## Handle Multiple Secrets
 
-One can encrypt many secrets to the enclave ID. Repeat step 1 with any data, using the same package ID and the same enclave object ID. 
+Since Seal uses public key encryption, one can encrypt many secrets to the enclave ID. Repeat step 1 with any data, using the same package ID and the same enclave object ID. 
 
 Run steps 2-4 once to cache the Seal keys for the enclave ID.
 
@@ -254,10 +254,10 @@ Once keys are cached, decrypt any encrypted object by implementing one or more p
 
 ## Multiple Enclaves
 
-If you want to define multiple enclaves to have access to the same Seal encrypted secret, provision the secret to one enclave. Then this enclave can provision to other attested enclaves directly, without needing to fetch keys from Seal.
+Multiple enclaves can access the same Seal encrypted secret. An alternative it to use one enclave to provision to other attested enclaves directly, without needing to fetch keys from Seal.
 
 ## Troubleshooting
 
-1. Certificate expired error in Step 3: The certificate in the `FetchKeyRequest` expires after 10 minutes (TTL). Re-run Step 2 to generate a fresh request with a new certificate, then retry Step 3.
+1. Certificate expired error in Step 3: The certificate in the `FetchKeyRequest` expires after 30 minutes (TTL). Re-run Step 2 or update default to generate a fresh request with a new certificate, then retry Step 3.
 
 2. Enclave Restarts: If the enclave restarts, all ephemeral keys (including cached Seal keys) are lost. You must re-run Steps 2-5 to reinitialize the enclave with secrets.

@@ -77,7 +77,7 @@ pub async fn init_seal_key_load(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| EnclaveError::GenericError(format!("Time error: {e}")))?
         .as_millis() as u64;
-    let ttl_min = 10;
+    let ttl_min = 30; // Certificate valid for 30 minutes.
     let message = signed_message(
         SEAL_CONFIG.package_id.to_string(),
         session_vk,
