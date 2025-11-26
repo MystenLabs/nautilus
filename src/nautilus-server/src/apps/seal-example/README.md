@@ -2,9 +2,9 @@
 
 This example is currently WIP. Use it as a reference only. 
 
-The Seal-Nautilus pattern provides secure secret management for enclave applications, where user can encrypt any secrets to the enclave binary. 
+The Seal-Nautilus pattern provides secure secret management for enclave applications, where user can encrypt any secrets to the enclave binary.
 
-One can define a Seal policy bounded to an enclave identity configured with specified PCRs. Users can use the enclave identity to encrypt any data using Seal, and only the enclave of the given PCRs can decrypt it. 
+One can define a Seal policy configured with specified PCRs. Users can encrypt any data using Seal with a fixed ID, and only the enclave of the given PCRs can decrypt it. 
 
 Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we encrypt it using Seal, and show that only the enclave with the expected PCRs is able to decrypt and use it. 
 
@@ -14,7 +14,7 @@ Here we reuse the weather example: Instead of storing the `weather-api-key` with
 
 2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers).
 
-3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy using the enclave object. 
+3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy that verifies the enclave wallet signature. 
 
 ## Overview
 
@@ -31,7 +31,7 @@ Phase 1: Start and Register the Server
 
 Phase 2: Initialize and Complete Key Load
 
-4. Admin calls `/admin/init_seal_key_load` with the enclave object and key ID. Enclave returns an encoded `FetchKeyRequest`.
+4. Admin calls `/admin/init_seal_key_load` with the enclave object. Enclave returns an encoded `FetchKeyRequest`.
 
 5. Admin uses FetchKeyRequest to call CLI to get Seal responses, encrypted under the enclave's encryption public key.
 
@@ -53,8 +53,8 @@ The enclave generates 3 keypairs on startup, all kept only in enclave memory:
 
 During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate and also signs the enclave public key as a commitment. This signature is included in the PTB passed to `seal_approve`. When Seal servers dry-run the transaction, `seal_approve` verifies:
 
-1. The wallet signature is valid over the enclave's public key. 
-2. The key ID matches the enclave's object ID. 
+1. The wallet signature is valid over the enclave's public key.
+2. The key ID is a fixed value of 0.
 3. The transaction sender matches the wallet public key. 
 
 This proves that only the enclave (which has access to both keys) could have created a valid signed PTB. 
@@ -137,9 +137,8 @@ This command looks up the public keys of the specified key servers ID using publ
 ```bash
 # in seal repo
 APP_PACKAGE_ID=0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0
-ENCLAVE_OBJECT_ID=0x926b69b1c193ceb8ce4df0938c9d9f16fc9f4812abb7e8a9fac386d773ff91e1
 cargo run --bin seal-cli encrypt --secret 303435613237383132646265343536333932393133323233323231333036 \
-    --id $ENCLAVE_OBJECT_ID \
+    --id 0 \
     -p $APP_PACKAGE_ID \
     -t 2 \
     -k 0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75,0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8 \
@@ -156,7 +155,7 @@ Encrypted object:
 '303435613237383132646265343536333932393133323233323231333036'
 ```
 
-`--id`: The enclave object ID. This is the idenity used to encrypt any data to the enclave. 
+`--id`: A fixed value of 0. This is the identity used to encrypt any data to the enclave. 
 `-p`: The package ID containing the Seal policy (the APP_PACKAGE_ID from Step 0).
 `-k`: A list of key server object ids. Here we use the two Mysten open testnet servers.
 `-t`: Threshold used for encryption.
@@ -166,7 +165,7 @@ Encrypted object:
 
 This step is done in the host that the enclave runs in, that can communicate to the enclave via port 3001.
 
-In this call, the enclave creates a certificate and constructs a PTB calling `seal_approve` with the enclave object ID. The enclave wallet signs the enclave's public key to commit to it. A session key signs the request and returns the encoded FetchKeyRequest.
+In this call, the enclave creates a certificate and constructs a PTB calling `seal_approve`. The enclave wallet signs the enclave's public key to commit to it. A session key signs the request and returns the encoded FetchKeyRequest.
 
 ```bash
 curl -X POST http://localhost:3001/admin/init_seal_key_load \
@@ -220,7 +219,7 @@ curl -X POST http://localhost:3001/admin/complete_seal_key_load \
 
 This step is done in the host that the enclave runs in, that can communicate to the enclave via port 3001. Replace `<ENCRYPTED_OBJECT>` with the output from Step 1.
 
-In this call, the enclave uses the cached keys from Step 4 to decrypt the encrypted weather API key. This endpoint is application specific and replace or add more if needed. Repeat step 1 to encrypt other data to the enclave object ID and provision them to the enclave with an endpoint. 
+In this call, the enclave uses the cached keys from Step 4 to decrypt the encrypted weather API key. This endpoint is application specific and replace or add more if needed. Repeat step 1 to encrypt other data using ID value 0 and provision them to the enclave with an endpoint. 
 
 ```bash
 curl -X POST http://localhost:3001/admin/provision_weather_api_key \
@@ -246,9 +245,9 @@ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fran
 
 ## Handle Multiple Secrets
 
-Since Seal uses public key encryption, one can encrypt many secrets to the enclave ID. Repeat step 1 with any data, using the same package ID and the same enclave object ID. 
+Since Seal uses public key encryption, one can encrypt many secrets using the same fixed ID value of 0. Repeat step 1 with any data, using the same package ID and the same ID value of 0.
 
-Run steps 2-4 once to cache the Seal keys for the enclave ID.
+Run steps 2-4 once to cache the Seal keys for the enclave.
 
 Once keys are cached, decrypt any encrypted object by implementing one or more provision endpoints similar to step 5. 
 

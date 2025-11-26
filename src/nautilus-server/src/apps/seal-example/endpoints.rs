@@ -211,7 +211,7 @@ async fn create_ptb(
 
     // Input 0: ID.
     inputs.push(Input::Pure {
-        value: bcs::to_bytes(&enclave_object_id)?,
+        value: bcs::to_bytes(&vec![0u8])?,
     });
 
     // Input 1: signature.
