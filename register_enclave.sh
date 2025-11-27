@@ -41,18 +41,27 @@ EOF
 )
 
 echo 'converted attestation'
-# Execute sui client command with the converted array and provided arguments
-# If key_type is specified, use register_enclave_with_key_type; otherwise use register_enclave (defaults to Ed25519)
-if [ -z "$KEY_TYPE" ]; then
-    sui client ptb --assign v "vector$ATTESTATION_ARRAY" \
-        --move-call "0x2::nitro_attestation::load_nitro_attestation" v @0x6 \
-        --assign result \
-        --move-call "${ENCLAVE_PACKAGE_ID}::enclave::register_enclave<${APP_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" @${ENCLAVE_CONFIG_OBJECT_ID} result \
-        --gas-budget 100000000
-else
-    sui client ptb --assign v "vector$ATTESTATION_ARRAY" \
-        --move-call "0x2::nitro_attestation::load_nitro_attestation" v @0x6 \
-        --assign result \
-        --move-call "${ENCLAVE_PACKAGE_ID}::enclave::register_enclave_with_key_type<${APP_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" @${ENCLAVE_CONFIG_OBJECT_ID} result "${ENCLAVE_PACKAGE_ID}::enclave::KeyType::${KEY_TYPE}" \
-        --gas-budget 100000000
+
+# Map key_type to the appropriate register function
+REGISTER_FUNC="register_enclave"
+if [ -n "$KEY_TYPE" ]; then
+    case "$KEY_TYPE" in
+        Ed25519|ed25519)
+            REGISTER_FUNC="register_enclave_ed25519"
+            ;;
+        Secp256k1|secp256k1)
+            REGISTER_FUNC="register_enclave_secp256k1"
+            ;;
+        *)
+            echo "Error: Invalid key_type '$KEY_TYPE'. Must be Ed25519 or Secp256k1."
+            exit 1
+            ;;
+    esac
 fi
+
+# Execute sui client command with the converted array and provided arguments
+sui client ptb --assign v "vector$ATTESTATION_ARRAY" \
+    --move-call "0x2::nitro_attestation::load_nitro_attestation" v @0x6 \
+    --assign result \
+    --move-call "${ENCLAVE_PACKAGE_ID}::enclave::${REGISTER_FUNC}<${APP_PACKAGE_ID}::${MODULE_NAME}::${OTW_NAME}>" @${ENCLAVE_CONFIG_OBJECT_ID} result \
+    --gas-budget 100000000
