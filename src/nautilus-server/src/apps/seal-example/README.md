@@ -47,17 +47,17 @@ Phase 3: Provision Application Secrets
 
 The enclave generates 3 keypairs on startup, all kept only in enclave memory:
 
-1. Enclave ephemeral keypair: Registered on-chain in the Enclave object, used to sign `/process_data` responses.
-2. Enclave Seal wallet keypair: Used for Seal certificate and PTB signing.
-3. ElGamal encryption keypair: Used to decrypt Seal responses.
+1. Enclave ephemeral keypair (`state.eph_kp`): Registered on-chain in the Enclave object, used to sign enclave responses (e.g., `/process_data` responses).
+2. Enclave wallet keypair (`ENCLAVE_WALLET_BYTES`): Used to sign PTBs and messages committing to the ephemeral public key.
+3. ElGamal encryption keypair (`ENCRYPTION_KEYS`): Used to decrypt Seal responses.
 
-During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate and also signs the enclave public key as a commitment. This signature is included in the PTB passed to `seal_approve`. When Seal servers dry-run the transaction, `seal_approve` verifies:
+During `/init_seal_key_load`, the enclave wallet keypair signs a PersonalMessage for the certificate and also commits to the ephemeral public key. This signature is included in the PTB passed to `seal_approve`. When Seal servers dry-run the transaction, `seal_approve` verifies:
 
-1. The wallet signature is valid over the enclave's public key.
+1. The wallet signature verifies against wallet public key and commits to the ephemeral public key.
 2. The key ID is a fixed value of 0.
-3. The transaction sender matches the wallet public key. 
+3. The transaction sender matches the wallet public key.
 
-This proves that only the enclave (which has access to both keys) could have created a valid signed PTB. 
+This proves that only the enclave (which has access to both the ephemeral keypair and wallet keypair) could have created a valid signed PTB. 
 
 During `/init_seal_key_load`, the enclave also generates an encryption key and return the encryption public key as part of `FetchKeyRequest`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse` since it does not have the encryption secret key. Then the `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify the consistency and decrypt the secret in memory.
 
@@ -148,7 +148,7 @@ Encrypted object:
 <ENCRYPTED_OBJECT>
 ```
 
-`--secret`: The secret value you are encrypting in Hex format. Only the enclave has access to decrypt it. The `weather-api-key` converted from UTF-8 to hex in python:
+`--secret`: The secret value you are encrypting in Hex format. Only the enclave has access to decrypt it. Here we use an example value for  `weather-api-key` converted from UTF-8 to Hex:
 
 ```python
 >>> '045a27812dbe456392913223221306'.encode('utf-8').hex()

@@ -12,7 +12,12 @@ module seal_policy_example::seal_policy {
     entry fun seal_approve(id: vector<u8>, signature: vector<u8>, wallet_pk: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
         // In this example whether the enclave is the latest version is not checked. One
         // can pass EnclaveConfig as an argument and check config_version if needed.
-        assert!(ed25519::ed25519_verify(&signature, &wallet_pk, enclave.pk()), ENoAccess);
+
+        // Verify signature over "SEAL-APPROVE" || enclave_pk. 
+        let mut message = b"SEAL-APPROVE";
+        message.append(*enclave.pk());
+
+        assert!(ed25519::ed25519_verify(&signature, &wallet_pk, &message), ENoAccess);
         assert!(id == vector[0u8], ENoAccess);
         assert!(ctx.sender().to_bytes() == pk_to_address(&wallet_pk), ENoAccess);
     }

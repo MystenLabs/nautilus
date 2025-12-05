@@ -203,10 +203,13 @@ async fn create_ptb(
     let mut inputs = vec![];
     let mut commands = vec![];
 
-    // Get the enclave wallet and sign over the enclave public key.
-    let wallet = Ed25519KeyPair::from_bytes(&*ENCLAVE_WALLET_BYTES)
-        .expect("Failed to reconstruct keypair from bytes");
-    let signature = wallet.sign(&enclave_pk).as_bytes().to_vec();
+    // Load enclave wallet.
+    let wallet = Ed25519KeyPair::from_bytes(&*ENCLAVE_WALLET_BYTES).expect("Must be valid");
+
+    // Sign over "SEAL-APPROVE" || enclave_pk.
+    let mut message = b"SEAL-APPROVE".to_vec();
+    message.extend_from_slice(&enclave_pk);
+    let signature = wallet.sign(&message).as_bytes().to_vec();
     let wallet_pk = wallet.public().as_bytes().to_vec();
 
     // Input 0: ID.
