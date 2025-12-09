@@ -175,7 +175,7 @@ fun to_pcrs(document: &NitroAttestationDocument): Pcrs {
     Pcrs(*pcrs[0].value(), *pcrs[1].value(), *pcrs[2].value())
 }
 
-fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
+public fun create_intent_message<P: drop>(intent: u8, timestamp_ms: u64, payload: P): IntentMessage<P> {
     IntentMessage {
         intent,
         timestamp_ms,

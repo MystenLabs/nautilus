@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::common::{IntentMessage, IntentScope};
 use axum::extract::State;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -108,13 +109,13 @@ pub async fn init_seal_key_load(
         mvr_name: None,
     };
 
-    // Create PTB for seal_approve of package with key ID and enclave public key.
-    let enclave_pk = state.eph_kp.public().as_bytes().to_vec();
+    // Create PTB for seal_approve of package with enclave keypair.
     let ptb = create_ptb(
         SEAL_CONFIG.package_id,
         request.enclave_object_id,
         request.initial_shared_version,
-        enclave_pk,
+        &state.eph_kp,
+        creation_time,
     )
     .await
     .map_err(|e| EnclaveError::GenericError(format!("Failed to create PTB: {e}")))?;
@@ -191,26 +192,41 @@ pub async fn provision_weather_api_key(
     }))
 }
 
+/// Signing payload struct that matches Move contract's SigningPayload.
+#[derive(serde::Serialize)]
+struct SigningPayload {
+    pk: Vec<u8>,
+}
+
 /// Helper function that creates a PTB with a single seal_approve command for the given ID and the
-/// enclave shared object. Creates a signature using the enclave wallet signing the enclave's public
-/// key.
+/// enclave shared object. Creates a signature using the enclave keypair signing the wallet public key.
 async fn create_ptb(
     package_id: Address,
     enclave_object_id: Address,
     initial_shared_version: u64,
-    enclave_pk: Vec<u8>,
+    enclave_kp: &Ed25519KeyPair,
+    timestamp: u64,
 ) -> Result<ProgrammableTransaction, Box<dyn std::error::Error>> {
     let mut inputs = vec![];
     let mut commands = vec![];
 
     // Load enclave wallet.
-    let wallet = Ed25519KeyPair::from_bytes(&*ENCLAVE_WALLET_BYTES).expect("Must be valid");
+    let sui_wallet = Ed25519PrivateKey::new(*ENCLAVE_WALLET_BYTES);
+    let wallet_pk = sui_wallet.public_key().as_bytes().to_vec();
 
-    // Sign over "SEAL-APPROVE" || enclave_pk.
-    let mut message = b"SEAL-APPROVE".to_vec();
-    message.extend_from_slice(&enclave_pk);
-    let signature = wallet.sign(&message).as_bytes().to_vec();
-    let wallet_pk = wallet.public().as_bytes().to_vec();
+    // Create intent message with wallet public key.
+    let signing_payload = SigningPayload {
+        pk: wallet_pk.clone(),
+    };
+    let intent_msg = IntentMessage {
+        intent: IntentScope::WalletPK,
+        timestamp_ms: timestamp,
+        data: signing_payload,
+    };
+
+    // Sign with enclave keypair.
+    let signing_bytes = bcs::to_bytes(&intent_msg)?;
+    let signature = enclave_kp.sign(&signing_bytes).as_bytes().to_vec();
 
     // Input 0: ID.
     inputs.push(Input::Pure {
@@ -227,7 +243,12 @@ async fn create_ptb(
         value: bcs::to_bytes(&wallet_pk)?,
     });
 
-    // Input 3: shared enclave object.
+    // Input 3: timestamp.
+    inputs.push(Input::Pure {
+        value: bcs::to_bytes(&timestamp)?,
+    });
+
+    // Input 4: shared enclave object.
     inputs.push(Input::Shared {
         object_id: enclave_object_id,
         initial_shared_version,
@@ -244,7 +265,8 @@ async fn create_ptb(
             Argument::Input(0), // id
             Argument::Input(1), // signature
             Argument::Input(2), // wallet_pk
-            Argument::Input(3), // enclave object
+            Argument::Input(3), // timestamp
+            Argument::Input(4), // enclave object
         ],
     };
     commands.push(Command::MoveCall(move_call));

@@ -2,22 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module seal_policy_example::seal_policy {
-    use enclave::enclave::Enclave;
+    use enclave::enclave::{Enclave, create_intent_message};
     use seal_policy_example::weather::WEATHER;
-    use sui::hash::blake2b256;
-    use sui::ed25519;
+    use sui::{bcs, ed25519, hash::blake2b256};
 
     const ENoAccess: u64 = 0;
+    const WalletPkIntent: u8 = 1;
 
-    entry fun seal_approve(id: vector<u8>, signature: vector<u8>, wallet_pk: vector<u8>, enclave: &Enclave<WEATHER>, ctx: &TxContext) {
+    public struct SigningPayload has drop {
+        pk: vector<u8>,
+    }
+
+    entry fun seal_approve(
+        id: vector<u8>,
+        signature: vector<u8>,
+        wallet_pk: vector<u8>,
+        timestamp: u64,
+        enclave: &Enclave<WEATHER>,
+        ctx: &TxContext,
+    ) {
         // In this example whether the enclave is the latest version is not checked. One
         // can pass EnclaveConfig as an argument and check config_version if needed.
-
-        // Verify signature over "SEAL-APPROVE" || enclave_pk. 
-        let mut message = b"SEAL-APPROVE";
-        message.append(*enclave.pk());
-
-        assert!(ed25519::ed25519_verify(&signature, &wallet_pk, &message), ENoAccess);
+        let signing_payload = create_intent_message(
+            WalletPkIntent,
+            timestamp, // Timestamp is not checked in this example since it is checked at Seal session key.
+            SigningPayload {
+                pk: wallet_pk,
+            },
+        );
+        let payload = bcs::to_bytes(&signing_payload);
+        assert!(ed25519::ed25519_verify(&signature, enclave.pk(), &payload), ENoAccess);
         assert!(id == vector[0u8], ENoAccess);
         assert!(ctx.sender().to_bytes() == pk_to_address(&wallet_pk), ENoAccess);
     }
@@ -35,5 +49,20 @@ module seal_policy_example::seal_policy {
         let eph_pk = x"5c38d3668c45ff891766ee99bd3522ae48d9771dc77e8a6ac9f0bde6c3a2ca48";
         let expected_bytes = x"29287d8584fb5b71b8d62e7224b867207d205fb61d42b7cce0deef95bf4e8202";
         assert!(pk_to_address(&eph_pk) == expected_bytes, ENoAccess);
+    }
+
+    #[test]
+    fun test_serde() {
+        let intent_msg = create_intent_message(
+            WalletPkIntent,
+            1765316853535,
+            SigningPayload {
+                pk: x"156bc6994a756d82a6695e0cc8a5278fedd8f2a45415824527652123ba4c91a5",
+            },
+        );
+        let signing_payload = bcs::to_bytes(&intent_msg);
+        let expected =
+            x"011f7f15059b01000020156bc6994a756d82a6695e0cc8a5278fedd8f2a45415824527652123ba4c91a5";
+        assert!(signing_payload == expected);
     }
 }

@@ -37,6 +37,7 @@ pub struct IntentMessage<T: Serialize> {
 #[repr(u8)]
 pub enum IntentScope {
     ProcessData = 0,
+    WalletPK = 1,
 }
 
 impl<T: Serialize + Debug> IntentMessage<T> {
