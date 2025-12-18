@@ -7,7 +7,7 @@ module seal_policy_example::seal_policy {
     use sui::{bcs, ed25519, hash::blake2b256};
 
     const ENoAccess: u64 = 0;
-    const WalletPkIntent: u8 = 1;
+    const WalletPKIntent: u8 = 1;
 
     public struct WalletPK has drop {
         pk: vector<u8>,
@@ -15,7 +15,7 @@ module seal_policy_example::seal_policy {
 
     /// Seal approve policy that checks: 
     /// 1) Tje ID used to derive Seal key is always [0]. 
-    /// 2) The sender matches the wallet pk hash. 
+    /// 2) The sender matches the wallet PK hash. 
     /// 3) The signature is verified against the enclave's registered ephemeral pk and its payload 
     /// (the bcs bytes of the intent message of the wallet PK and the timestamp).
     /// 
@@ -35,7 +35,7 @@ module seal_policy_example::seal_policy {
         assert!(ctx.sender().to_bytes() == pk_to_address(&wallet_pk), ENoAccess);
 
         let signing_payload = create_intent_message(
-            WalletPkIntent,
+            WalletPKIntent,
             timestamp,
             WalletPK {
                 pk: wallet_pk,
@@ -64,7 +64,7 @@ module seal_policy_example::seal_policy {
     #[test]
     fun test_serde() {
         let intent_msg = create_intent_message(
-            WalletPkIntent,
+            WalletPKIntent,
             1766090239319,
             WalletPK {
                 pk: x"8c96dd36dff65ae0d2744658d08265830f5765a028022951393c88e4466f1e49",

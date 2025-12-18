@@ -14,7 +14,7 @@ Here we reuse the weather example: Instead of storing the `weather-api-key` with
 
 2. Seal [CLI](https://github.com/MystenLabs/seal/tree/main/crates/seal-cli): In particular, `encrypt` and `fetch-keys` are used for this example. The latest doc for the CLI can be found [here](https://seal-docs.wal.app/SealCLI/#7-encrypt-and-fetch-keys-using-service-providers).
 
-3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy that verifies the enclave wallet signature. 
+3. Move contract `move/seal-policy/seal_policy.move`: This defines the `seal_approve` policy that verifies the signature committed to the wallet public key using the enclave ephermal key. 
 
 ## Overview
 
@@ -45,19 +45,19 @@ Phase 3: Provision Application Secrets
 
 ## Security Guarantees
 
-The enclave generates 3 keypairs on startup, all kept only in enclave memory:
+The enclave generates 3 keys on startup, all kept only in enclave memory:
 
-1. Enclave ephemeral keypair (`state.eph_kp`): Registered on-chain in the Enclave object, used to sign `/process_data` responses and the signature input for `seal_approve` PTB.
-2. Enclave Seal wallet keypair (`ENCLAVE_WALLET_BYTES`): Used for Seal certificate signing and as the transaction sender for `seal_approve`.
+1. Enclave ephemeral keypair (`state.eph_kp`): Registered on-chain in the Enclave object, used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB.
+2. Enclave Seal wallet (`WALLET_BYTES`): Used for Seal certificate signing and as the transaction sender for `seal_approve`.
 3. ElGamal encryption keypair (`ENCRYPTION_KEYS`): Used to decrypt Seal responses.
 
-During `/init_seal_key_load`, the enclave wallet signs a PersonalMessage for the certificate. The enclave also creates a PTB for `seal_approve` where the signature argument is created by the ephemeral keypair signs an intent message containing the wallet's public key and timestamp. When Seal servers dry-run the transaction, `seal_approve` verifies:
+During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate. The enclave also creates a PTB for `seal_approve` where the signature argument is created by the enclave ephemeral keypair signs an intent message containing the wallet's public key and timestamp. When Seal servers dry-run the transaction, `seal_approve` verifies:
 
 1. The signature is valid using the enclave's ephemeral public key (from `enclave.pk()`), verifying an intent message with scope `WalletPK` over the wallet public key and timestamp.
 2. The key ID is a fixed value of 0.
 3. The transaction sender matches the wallet public key.
 
-This proves that only the enclave (which has access to both keypairs) could have created a valid signed PTB, as the ephemeral keypair signs a commitment to the wallet public key. 
+This proves that only the enclave (which has access to wallet and the ephemeral keypair) could have created a valid signed PTB, as the ephemeral keypair signs a commitment to the wallet public key. 
 
 During `/init_seal_key_load`, the enclave also generates an encryption key and return the encryption public key as part of `FetchKeyRequest`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse` since it does not have the encryption secret key. Then the `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify the consistency and decrypt the secret in memory.
 
@@ -165,7 +165,7 @@ Encrypted object:
 
 This step is done in the host that the enclave runs in, that can communicate to the enclave via port 3001.
 
-In this call, the enclave creates a certificate (signed by the wallet keypair) and constructs a PTB calling `seal_approve`. The enclave's ephemeral keypair signs an intent message committing to the wallet public key. A session key signs the request and returns the encoded FetchKeyRequest.
+In this call, the enclave creates a certificate (signed by the wallet) and constructs a PTB calling `seal_approve`. The enclave ephemeral keypair signs an intent message of the wallet public key. A session key signs the request and returns the encoded FetchKeyRequest.
 
 ```bash
 curl -X POST http://localhost:3001/admin/init_seal_key_load \

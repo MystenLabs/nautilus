@@ -43,8 +43,9 @@ lazy_static::lazy_static! {
         genkey(&mut thread_rng())
     };
 
-    /// Enclave wallet private key bytes, used to create signature for seal_approve PTB.
-    pub static ref ENCLAVE_WALLET_BYTES: [u8; 32] = {
+    /// Wallet private key bytes, used to sign personal messages for certificate used to
+    /// fetch keys from Seal servers.
+    pub static ref WALLET_BYTES: [u8; 32] = {
         let keypair = Ed25519KeyPair::generate(&mut thread_rng());
         let private_key = keypair.private();
         let bytes = private_key.as_ref();
@@ -60,7 +61,7 @@ lazy_static::lazy_static! {
 }
 
 /// This endpoint takes an enclave object id with initial shared version and a key identity. It
-/// initializes the session key and uses the enclave wallet to sign the personal message. Returns a
+/// initializes the session key and uses the wallet to sign the personal message. Returns a
 /// Hex encoded BCS serialized FetchKeyRequest containing the certificate and the desired PTB for
 /// seal_approve. This is the first step for the key load phase.
 pub async fn init_seal_key_load(
@@ -87,13 +88,13 @@ pub async fn init_seal_key_load(
         ttl_min,
     );
 
-    // Load enclave wallet and convert to sui-crypto for signing.
-    let sui_wallet = Ed25519PrivateKey::new(*ENCLAVE_WALLET_BYTES);
+    // Load wallet.
+    let wallet = Ed25519PrivateKey::new(*WALLET_BYTES);
 
     // Sign personal message.
     let signature = {
         use sui_crypto::SuiSigner;
-        sui_wallet
+        wallet
             .sign_personal_message(&PersonalMessage(message.as_bytes().into()))
             .map_err(|e| {
                 EnclaveError::GenericError(format!("Failed to sign personal message: {e}"))
@@ -102,7 +103,7 @@ pub async fn init_seal_key_load(
 
     // Create certificate with wallet's address and session vk.
     let certificate = Certificate {
-        user: sui_wallet.public_key().derive_address(),
+        user: wallet.public_key().derive_address(),
         session_vk: session_vk.clone(),
         creation_time,
         ttl_min,
@@ -200,7 +201,8 @@ struct WalletPK {
 }
 
 /// Helper function that creates a PTB with a single seal_approve command for the given ID and the
-/// enclave shared object. Creates a signature using the enclave keypair signing the wallet public key.
+/// enclave shared object. The signature argument is created using the enclave ephemeral keypair
+/// signing over the intent message of wallet public key.
 async fn create_ptb(
     package_id: Address,
     enclave_object_id: Address,
@@ -211,9 +213,9 @@ async fn create_ptb(
     let mut inputs = vec![];
     let mut commands = vec![];
 
-    // Load enclave wallet.
-    let sui_wallet = Ed25519PrivateKey::new(*ENCLAVE_WALLET_BYTES);
-    let wallet_pk = sui_wallet.public_key().as_bytes().to_vec();
+    // Load wallet.
+    let wallet = Ed25519PrivateKey::new(*WALLET_BYTES);
+    let wallet_pk = wallet.public_key().as_bytes().to_vec();
 
     // Create intent message with wallet public key.
     let signing_payload = WalletPK {
@@ -221,7 +223,7 @@ async fn create_ptb(
     };
     let intent_msg = IntentMessage::new(signing_payload, timestamp, IntentScope::WalletPK);
 
-    // Sign with enclave keypair.
+    // Sign with enclave ephemeral keypair.
     let signing_bytes = bcs::to_bytes(&intent_msg)?;
     let signature = enclave_kp.sign(&signing_bytes).as_bytes().to_vec();
 
