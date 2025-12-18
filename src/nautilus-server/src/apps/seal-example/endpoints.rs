@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::common::{IntentMessage, IntentScope};
+use super::IntentScope;
+use crate::common::IntentMessage;
 use axum::extract::State;
 use axum::Json;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -192,9 +193,9 @@ pub async fn provision_weather_api_key(
     }))
 }
 
-/// Signing payload struct that matches Move contract's SigningPayload.
-#[derive(serde::Serialize)]
-struct SigningPayload {
+/// Signing payload struct that matches Move contract's struct WalletPK.
+#[derive(serde::Serialize, Debug)]
+struct WalletPK {
     pk: Vec<u8>,
 }
 
@@ -215,14 +216,10 @@ async fn create_ptb(
     let wallet_pk = sui_wallet.public_key().as_bytes().to_vec();
 
     // Create intent message with wallet public key.
-    let signing_payload = SigningPayload {
+    let signing_payload = WalletPK {
         pk: wallet_pk.clone(),
     };
-    let intent_msg = IntentMessage {
-        intent: IntentScope::WalletPK,
-        timestamp_ms: timestamp,
-        data: signing_payload,
-    };
+    let intent_msg = IntentMessage::new(signing_payload, timestamp, IntentScope::WalletPK);
 
     // Sign with enclave keypair.
     let signing_bytes = bcs::to_bytes(&intent_msg)?;

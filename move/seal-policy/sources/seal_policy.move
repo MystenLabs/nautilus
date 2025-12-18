@@ -9,7 +9,7 @@ module seal_policy_example::seal_policy {
     const ENoAccess: u64 = 0;
     const WalletPkIntent: u8 = 1;
 
-    public struct SigningPayload has drop {
+    public struct WalletPK has drop {
         pk: vector<u8>,
     }
 
@@ -26,7 +26,7 @@ module seal_policy_example::seal_policy {
         let signing_payload = create_intent_message(
             WalletPkIntent,
             timestamp, // Timestamp is not checked in this example since it is checked at Seal session key.
-            SigningPayload {
+            WalletPK {
                 pk: wallet_pk,
             },
         );
@@ -56,7 +56,7 @@ module seal_policy_example::seal_policy {
         let intent_msg = create_intent_message(
             WalletPkIntent,
             1765316853535,
-            SigningPayload {
+            WalletPK {
                 pk: x"156bc6994a756d82a6695e0cc8a5278fedd8f2a45415824527652123ba4c91a5",
             },
         );

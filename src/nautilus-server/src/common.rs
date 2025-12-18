@@ -12,8 +12,6 @@ use nsm_api::driver;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use serde_repr::Deserialize_repr;
-use serde_repr::Serialize_repr;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -24,24 +22,16 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 /// ==== COMMON TYPES ====
 /// Intent message wrapper struct containing the intent scope and timestamp.
 /// This standardizes the serialized payload for signing.
+/// Generic over both the data type T and the intent scope type I.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct IntentMessage<T: Serialize> {
-    pub intent: IntentScope,
+pub struct IntentMessage<T: Serialize, I: Serialize> {
+    pub intent: I,
     pub timestamp_ms: u64,
     pub data: T,
 }
 
-/// Intent scope enum. Add new scope here if needed, each corresponds to a
-/// scope for signing. Replace in with your own intent per message type being signed by the enclave.
-#[derive(Serialize_repr, Deserialize_repr, Debug)]
-#[repr(u8)]
-pub enum IntentScope {
-    ProcessData = 0,
-    WalletPK = 1,
-}
-
-impl<T: Serialize + Debug> IntentMessage<T> {
-    pub fn new(data: T, timestamp_ms: u64, intent: IntentScope) -> Self {
+impl<T: Serialize + Debug, I: Serialize> IntentMessage<T, I> {
+    pub fn new(data: T, timestamp_ms: u64, intent: I) -> Self {
         Self {
             data,
             timestamp_ms,
@@ -64,12 +54,12 @@ pub struct ProcessDataRequest<T> {
 }
 
 /// Sign the bcs bytes of the the payload with keypair.
-pub fn to_signed_response<T: Serialize + Clone>(
+pub fn to_signed_response<T: Serialize + Clone, I: Serialize>(
     kp: &Ed25519KeyPair,
     payload: T,
     timestamp_ms: u64,
-    intent: IntentScope,
-) -> ProcessedDataResponse<IntentMessage<T>> {
+    intent: I,
+) -> ProcessedDataResponse<IntentMessage<T, I>> {
     let intent_msg = IntentMessage {
         intent,
         timestamp_ms,

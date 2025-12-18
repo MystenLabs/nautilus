@@ -9,15 +9,25 @@ pub use types::*;
 
 use crate::app::endpoints::SEAL_API_KEY;
 use crate::common::IntentMessage;
-use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
+use crate::common::{to_signed_response, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::sync::Arc;
 use tracing::info;
+
+/// Intent scope enum for your application. Each intent message signed by the enclave ephemeral key
+/// should have its own intent scope.
+#[derive(Serialize_repr, Deserialize_repr, Debug)]
+#[repr(u8)]
+pub enum IntentScope {
+    ProcessData = 0,
+    WalletPK = 1,
+}
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WeatherResponse {
@@ -34,7 +44,8 @@ pub struct WeatherRequest {
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
-) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError> {
+) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse, IntentScope>>>, EnclaveError>
+{
     // API key loaded from what was set during bootstrap.
     let api_key_guard = SEAL_API_KEY.read().await;
     let api_key = api_key_guard.as_ref().ok_or_else(|| {
