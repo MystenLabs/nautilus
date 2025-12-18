@@ -70,7 +70,7 @@ module seal_policy_example::weather {
     fun test_weather_flow() {
         use sui::test_scenario::{Self, ctx, next_tx};
         use sui::nitro_attestation;
-        use sui::test_utils::destroy;
+        use std::unit_test::destroy;
         use enclave::enclave::{register_enclave, create_enclave_config, update_pcrs, EnclaveConfig};
 
         let mut scenario = test_scenario::begin(@0x1);

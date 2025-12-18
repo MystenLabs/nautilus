@@ -54,7 +54,6 @@ public fun mint_nft<T>(twitter_name: vector<u8>, timestamp_ms: u64, sig: &vector
 fun test_twitter_flow() {
     use sui::test_scenario::{Self, ctx, next_tx};
     use sui::nitro_attestation;
-    use sui::test_utils::destroy;
     use enclave::enclave::{register_enclave, create_enclave_config, update_pcrs, EnclaveConfig};
     
     let mut scenario = test_scenario::begin(@0x4668aa5963dacfe3e169be3cf824395ab9de3f0a544fc2ca638858a536b5ff4b);
@@ -105,6 +104,6 @@ fun test_twitter_flow() {
     test_scenario::return_shared(config);
     clock.destroy_for_testing();
     enclave.destroy();
-    destroy(cap);
+    transfer::public_transfer(cap, @0x1);
     test_scenario::end(scenario);
 }
