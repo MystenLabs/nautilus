@@ -156,10 +156,6 @@ public fun deploy_old_enclave_by_owner<T>(e: Enclave<T>, ctx: &mut TxContext) {
     id.delete();
 }
 
-public fun id<T>(enclave: &Enclave<T>): vector<u8> {
-    enclave.id.to_bytes()
-}
-
 fun assert_is_valid_for_config<T>(cap: &Cap<T>, enclave_config: &EnclaveConfig<T>) {
     assert!(cap.id.to_inner() == enclave_config.capability_id, EInvalidCap);
 }
