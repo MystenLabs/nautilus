@@ -9,20 +9,21 @@ module seal_policy_example::seal_policy {
     const ENoAccess: u64 = 0;
     const WalletPKIntent: u8 = 1;
 
+    /// Signing payload struct signed by the enclave keypair.
     public struct WalletPK has drop {
         pk: vector<u8>,
     }
 
     /// Seal approve policy that checks: 
-    /// 1) Tje ID used to derive Seal key is always [0]. 
+    /// 1) The ID used to derive Seal key is always vector[0]. 
     /// 2) The sender matches the wallet PK hash. 
     /// 3) The signature is verified against the enclave's registered ephemeral pk and its payload 
     /// (the bcs bytes of the intent message of the wallet PK and the timestamp).
     /// 
-    /// In this example policy, whether the enclave is the latest version is not checked. One can 
+    /// In this example policy, whether the enclave is the latest version is not checked. One may 
     /// pass EnclaveConfig as an argument and check config_version if needed. In addition, the 
-    /// timestamp is not checked, since it's already checked at Seal session key. One may add 
-    /// additional checks against the clock object. 
+    /// timestamp is not checked, since it's already checked during Seal session key validation. One
+    /// may add additional checks against the clock object. 
     entry fun seal_approve(
         id: vector<u8>,
         signature: vector<u8>,

@@ -2,9 +2,9 @@
 
 This example is currently WIP. Use it as a reference only. 
 
-The Seal-Nautilus pattern provides secure secret management for enclave applications, where user can encrypt any secrets to the enclave binary.
+The Seal-Nautilus pattern provides secure secret management for enclave applications, where user can encrypt any secrets to an enclave binary.
 
-One can define a Seal policy configured with specified PCRs. Users can encrypt any data using Seal with a fixed ID, and only the enclave of the given PCRs can decrypt it. 
+One can define a Seal policy configured with specified PCRs of the enclave. Users can encrypt any data using Seal with a fixed ID, and only the enclave of the given PCRs can decrypt them. 
 
 Here we reuse the weather example: Instead of storing the `weather-api-key` with AWS Secret Manager, we encrypt it using Seal, and show that only the enclave with the expected PCRs is able to decrypt and use it. 
 
@@ -33,9 +33,9 @@ Phase 2: Initialize and Complete Key Load
 
 4. Admin calls `/admin/init_seal_key_load` with the enclave object. Enclave returns an encoded `FetchKeyRequest`.
 
-5. Admin uses FetchKeyRequest to call CLI to get Seal responses, encrypted under the enclave's encryption public key.
+5. Admin uses FetchKeyRequest to call CLI to get Seal responses that are encrypted under the enclave's encryption public key.
 
-6. Admin calls `/admin/complete_seal_key_load` with seal responses. Enclave decrypts and caches all Seal keys in memory for later use.
+6. Admin calls `/admin/complete_seal_key_load` with Seal responses. Enclave decrypts and caches all Seal keys in memory for later use.
 
 Phase 3: Provision Application Secrets
 
@@ -47,25 +47,25 @@ Phase 3: Provision Application Secrets
 
 The enclave generates 3 keys on startup, all kept only in enclave memory:
 
-1. Enclave ephemeral keypair (`state.eph_kp`): Registered on-chain in the Enclave object, used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB.
-2. Enclave Seal wallet (`WALLET_BYTES`): Used for Seal certificate signing and as the transaction sender for `seal_approve`.
-3. ElGamal encryption keypair (`ENCRYPTION_KEYS`): Used to decrypt Seal responses.
+1. Enclave ephemeral keypair (`state.eph_kp`): Ed25519 keypair. Used to sign `/process_data` responses and to create the signature argument in `seal_approve` PTB. Its public key is registered on-chain in the Enclave object.
+2. Seal wallet (`WALLET_BYTES`): Ed25519 keypair. Used for Seal certificate signing and as the transaction sender for `seal_approve`.
+3. ElGamal encryption keypair (`ENCRYPTION_KEYS`): BLS group elements. Used to decrypt Seal responses.
 
-During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate. The enclave also creates a PTB for `seal_approve` where the signature argument is created by the enclave ephemeral keypair signs an intent message containing the wallet's public key and timestamp. When Seal servers dry-run the transaction, `seal_approve` verifies:
+During `/init_seal_key_load`, the wallet signs a PersonalMessage for the certificate. The enclave also creates a PTB for `seal_approve` where the signature argument is created by the enclave ephemeral keypair signing an intent message containing the wallet's public key and timestamp. When Seal servers dry-run the transaction, `seal_approve` verifies:
 
-1. The signature is valid using the enclave's ephemeral public key (from `enclave.pk()`), verifying an intent message with scope `WalletPK` over the wallet public key and timestamp.
-2. The key ID is a fixed value of 0.
+1. The signature is verified using the enclave's ephemeral public key (from `enclave.pk()`) and the intent message with scope `WalletPK` over the wallet public key and timestamp.
+2. The key ID is a fixed value of `vector[0]`.
 3. The transaction sender matches the wallet public key.
 
-This proves that only the enclave (which has access to wallet and the ephemeral keypair) could have created a valid signed PTB, as the ephemeral keypair signs a commitment to the wallet public key. 
+This proves that only the enclave (which has access to wallet and the ephemeral keypair) could have created a valid signed PTB, as the ephemeral keypair commits to the wallet public key. 
 
-During `/init_seal_key_load`, the enclave also generates an encryption key and return the encryption public key as part of `FetchKeyRequest`. The host uses the CLI to fetch keys from Seal servers, but the host cannot decrypt the `FetchKeyResponse` since it does not have the encryption secret key. Then the `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify the consistency and decrypt the secret in memory.
+During `/init_seal_key_load`, the enclave also generates an encryption keypair and return the encryption public key as part of `FetchKeyRequest`. The fetch key CLI is called outside the enclave, but no one except the enclave can decrypt the `FetchKeyResponse` since only enclave has the encryption secret key. Then the `FetchKeyResponse` is passed to the enclave at `/complete_seal_key_load`, and only the enclave can verify and decrypt the Seal key in memory.
 
 ### Why Two Step Key Load is Needed for Phase 2?
 
 This is because an enclave operates without direct internet access so it cannot fetch secrets from Seal key servers' HTTP endpoints directly. Here we use the host acts as an intermediary to fetch encrypted secrets from Seal servers. 
 
-This delegation is secure because the Seal responses are encrypted under the enclave's encryption key, so only the enclave can later decrypt the fetched Seal responses. The enclave is also initialized with the public keys of the Seal servers in `seal_config.yaml`, which can be used to verify the decrypted secrets are not tampered with.
+This delegation is secure because the Seal responses are encrypted under the enclave's encryption key, so only the enclave can later decrypt the fetched Seal responses. The public keys of the Seal servers in `seal_config.yaml` are defined by the admin in the enclave, so the enclave can verify the decrypted Seal key is not tampered with.
 
 ## Steps
 
@@ -155,7 +155,7 @@ Encrypted object:
 '303435613237383132646265343536333932393133323233323231333036'
 ```
 
-`--id`: A fixed value of 0. This is the identity used to encrypt any data to the enclave. 
+`--id`: A fixed value of 0x00. This is the identity used to encrypt any data to the enclave. 
 `-p`: The package ID containing the Seal policy (the APP_PACKAGE_ID from Step 0).
 `-k`: A list of key server object ids. Here we use the two Mysten open testnet servers.
 `-t`: Threshold used for encryption.

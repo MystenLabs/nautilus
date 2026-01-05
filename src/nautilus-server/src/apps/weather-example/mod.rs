@@ -39,8 +39,7 @@ pub struct WeatherRequest {
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
-) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError>
-{
+) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError> {
     let url = format!(
         "https://api.weatherapi.com/v1/current.json?key={}&q={}",
         state.api_key, request.payload.location

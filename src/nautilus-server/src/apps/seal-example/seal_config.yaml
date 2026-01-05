@@ -5,10 +5,13 @@ key_servers:
   - "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75"
   - "0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8"
 
-# Replace with the public keys corresponding to the key servers above.
+# Replace with the public keys registered onchain corresponding to the key servers above. Since 
+# enclave do not have internet access to fetch them onchain. They are used to verify consistency of 
+#the decrypted Seal key. 
 public_keys:
   - "0xa040b5548bb0428fba159895c07080cbfdc76ef01bb88ca2ced5c85b07782e09970a1f5684e2a0dd3d3e31beb6cbd7ea02c49a3794b26c6d3d9ffdc99e4984cc981d0d72e933c2af3309216bf7011e9e82c7b68276882f18ba0ea7f45a7721db"
   - "0xa8cb6f59027d14e0a3e97ea1bd79aa6a942f36ffc835f5025591c680d598a5541f087facb39fb12a1d9d71b3a510942b1760e5f6685f86660a4c38b178928bb6d0362a6c7e244985527832c783a8b5195db743ff2289de3b23226dad86cd70f1"
 
-# Move package containing seal_approve, replace it with your own APP_PACKAGE_ID. 
+# Move package containing seal_approve, replace it with your own APP_PACKAGE_ID. See example package
+# at seal_policy.move.
 package_id: "0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0"

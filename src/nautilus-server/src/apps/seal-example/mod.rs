@@ -44,8 +44,7 @@ pub struct WeatherRequest {
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
-) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError>
-{
+) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError> {
     // API key loaded from what was set during bootstrap.
     let api_key_guard = SEAL_API_KEY.read().await;
     let api_key = api_key_guard.as_ref().ok_or_else(|| {
