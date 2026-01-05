@@ -63,16 +63,18 @@ module seal_policy_example::seal_policy {
 
     #[test]
     fun test_serde() {
+        // A consistency test for intent message serialization with Rust, using test data by running 
+        // Nautilus server locally logged timestamp, wallet pk and serialized signing bytes. 
         let intent_msg = create_intent_message(
             WalletPKIntent,
-            1766090239319,
+            1767627884584,
             WalletPK {
-                pk: x"8c96dd36dff65ae0d2744658d08265830f5765a028022951393c88e4466f1e49",
+                pk: x"b8b91c7c3afff7e75e44ce64c11455e60989697a37d16421d727e4d01607cfda",
             },
         );
         let signing_payload = bcs::to_bytes(&intent_msg);
         let expected =
-            x"01576d2e339b010000208c96dd36dff65ae0d2744658d08265830f5765a028022951393c88e4466f1e49";
+            x"012808d58e9b01000020b8b91c7c3afff7e75e44ce64c11455e60989697a37d16421d727e4d01607cfda";
         assert!(signing_payload == expected);
     }
 }

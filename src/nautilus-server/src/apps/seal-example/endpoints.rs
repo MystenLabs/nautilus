@@ -221,11 +221,19 @@ async fn create_ptb(
     let signing_payload = WalletPK {
         pk: wallet_pk.clone(),
     };
-    let intent_msg = IntentMessage::new(signing_payload, timestamp, IntentScope::WalletPK);
+    let intent_msg = IntentMessage::new(signing_payload, timestamp, IntentScope::WalletPK as u8);
 
     // Sign with enclave ephemeral keypair.
     let signing_bytes = bcs::to_bytes(&intent_msg)?;
     let signature = enclave_kp.sign(&signing_bytes).as_bytes().to_vec();
+
+    // Uncomment to run locally and generate test data for consistency check in Move contract.
+    // println!(
+    //     "Creating PTB with wallet pk: {}, signing_bytes: {}, timestamp: {}",
+    //     Hex::encode(&wallet_pk),
+    //     Hex::encode(&signing_bytes),
+    //     timestamp
+    // );
 
     // Input 0: ID.
     inputs.push(Input::Pure {
