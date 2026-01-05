@@ -39,7 +39,7 @@ pub struct WeatherRequest {
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<WeatherRequest>>,
-) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse, IntentScope>>>, EnclaveError>
+) -> Result<Json<ProcessedDataResponse<IntentMessage<WeatherResponse>>>, EnclaveError>
 {
     let url = format!(
         "https://api.weatherapi.com/v1/current.json?key={}&q={}",
@@ -74,7 +74,7 @@ pub async fn process_data(
             temperature,
         },
         last_updated_timestamp_ms,
-        IntentScope::ProcessData,
+        IntentScope::ProcessData as u8,
     )))
 }
 
@@ -116,7 +116,7 @@ mod test {
             temperature: 13,
         };
         let timestamp = 1744038900000;
-        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::ProcessData);
+        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::ProcessData as u8);
         let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
         assert!(
             signing_payload

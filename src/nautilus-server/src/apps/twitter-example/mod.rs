@@ -42,7 +42,7 @@ pub struct UserRequest {
 pub async fn process_data(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ProcessDataRequest<UserRequest>>,
-) -> Result<Json<ProcessedDataResponse<IntentMessage<UserData, IntentScope>>>, EnclaveError> {
+) -> Result<Json<ProcessedDataResponse<IntentMessage<UserData>>>, EnclaveError> {
     let user_url = request.payload.user_url.clone();
     info!("Processing data for user URL: {}", user_url);
 
@@ -59,7 +59,7 @@ pub async fn process_data(
             sui_address: sui_address.clone(),
         },
         current_timestamp,
-        IntentScope::ProcessData,
+        IntentScope::ProcessData as u8,
     )))
 }
 
@@ -208,7 +208,7 @@ mod test {
                 .unwrap(),
             },
             1743989326143,
-            IntentScope::ProcessData,
+            IntentScope::ProcessData as u8,
         );
         let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
         assert!(signing_payload == Hex::decode("003f41dd0d960100000c6d797374656e696e7465726e20101ce8865558e08408b83f60ee9e78843d03d547c850cbe12cb599e17833dd3e").unwrap());

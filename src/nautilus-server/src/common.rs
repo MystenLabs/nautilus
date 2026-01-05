@@ -22,16 +22,16 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 /// ==== COMMON TYPES ====
 /// Intent message wrapper struct containing the intent scope and timestamp.
 /// This standardizes the serialized payload for signing.
-/// Generic over both the data type T and the intent scope type I.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IntentMessage<T: Serialize, I: Serialize> {
-    pub intent: I,
+/// Generic over the data type T. Intent scope is stored as u8.
+#[derive(Serialize, Deserialize)]
+pub struct IntentMessage<T: Serialize> {
+    pub intent: u8,
     pub timestamp_ms: u64,
     pub data: T,
 }
 
-impl<T: Serialize + Debug, I: Serialize> IntentMessage<T, I> {
-    pub fn new(data: T, timestamp_ms: u64, intent: I) -> Self {
+impl<T: Serialize> IntentMessage<T> {
+    pub fn new(data: T, timestamp_ms: u64, intent: u8) -> Self {
         Self {
             data,
             timestamp_ms,
@@ -54,17 +54,13 @@ pub struct ProcessDataRequest<T> {
 }
 
 /// Sign the bcs bytes of the the payload with keypair.
-pub fn to_signed_response<T: Serialize + Clone, I: Serialize>(
+pub fn to_signed_response<T: Serialize + Clone>(
     kp: &Ed25519KeyPair,
     payload: T,
     timestamp_ms: u64,
-    intent: I,
-) -> ProcessedDataResponse<IntentMessage<T, I>> {
-    let intent_msg = IntentMessage {
-        intent,
-        timestamp_ms,
-        data: payload.clone(),
-    };
+    intent: u8,
+) -> ProcessedDataResponse<IntentMessage<T>> {
+    let intent_msg = IntentMessage::new(payload.clone(), timestamp_ms, intent);
 
     let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
     let sig = kp.sign(&signing_payload);
