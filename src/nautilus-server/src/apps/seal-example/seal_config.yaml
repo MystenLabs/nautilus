@@ -14,4 +14,4 @@ public_keys:
 
 # Move package containing seal_approve, replace it with your own APP_PACKAGE_ID. See example package
 # at seal_policy.move.
-package_id: "0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0"
+package_id: "0x7f0171b76f82cd61ebb4ac3fd502deac6552e9becd38be28d5692b69b5fdb54e"

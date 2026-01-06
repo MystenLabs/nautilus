@@ -50,6 +50,9 @@ When the enclave starts, it generates a fresh enclave key pair and exposes the f
         /twitter-example  Another example directory with similar parts as for above example. 
           mod.rs
           allowed_endpoints.yaml
+        /seal-example  Another example directory with similar parts as for above example. This is an example to use Seal and Nautilus pattern, see more details in src/nautilus-server/src/apps/seal-example/README.md.
+          mod.rs
+          allowed_endpoints.yaml
     run.sh          Runs the Rust server inside the enclave after configuring domains and the traffic forwarder. Do not modify.
     common.rs       Common code for retrieving attestation. Do not modify. 
 ```
@@ -115,7 +118,7 @@ For the Twitter example, this secret value refers to the API Bearer Token associ
 
 ```shell
 cd nautilus/
-make build ENCLAVE_APP=<APP> # this builds the enclave, e.g. `make build ENCLAVE_APP=weather-example`
+make ENCLAVE_APP=<APP> # this builds the enclave, e.g. `make ENCLAVE_APP=weather-example`
 make run # run the enclave
 sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
 ```

@@ -71,7 +71,11 @@ This delegation is secure because the Seal responses are encrypted under the enc
 
 ### Step 0: Build, Run and Register Enclave
 
-This is the same as the Nautilus template. Refer to the main guide for more detailed instructions. 
+This is largely the as the main Nautilus template (Refer to the main guide `UsingNautilus.md` for 
+more detailed instructions) with two additions:
+
+1. Update `seal_config.yaml` used by the enclave. 
+2. Record `ENCLAVE_OBJ_VERSION` in addition to `ENCLAVE_OBJECT_ID`.
 
 ```shell
 # publish the enclave package
@@ -79,26 +83,29 @@ cd move/enclave
 sui move build && sui client publish
 
 # find this in output and set env var
-ENCLAVE_PACKAGE_ID=0xc664c812bfce5b8ade4243da3d91fc529ac488f79f7f7bf2e0e7c4fd887a2433
+ENCLAVE_PACKAGE_ID=0x8ecf22e78c90c3e32833d76d82415d7e4227ea370bec4efdad4c4830cbda9e49
 
-# publish the app package
-cd move/seal-example
+# publish the seal-policy app package
+cd ../seal-policy
 sui move build && sui client publish
 
-# find these in output and set env var
-CAP_OBJECT_ID=0xa4a0ea418c1107a9d9ae2ff03dfaea5826cf6a419ee92f93988ec3c02d03c098
-ENCLAVE_CONFIG_OBJECT_ID=0xcd4a3253cbe065c776ab5b9ef781f0b9ba9bb6f150c39e5caa8c90464539e0e7
-APP_PACKAGE_ID=0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0
+# find these in output and set env vars
+CAP_OBJECT_ID=0xbd6ad872040eddc08f20ff11e20a3dc030c3e30f4ab2303a0c42447006724262
+ENCLAVE_CONFIG_OBJECT_ID=0x3ee612ffc17f29280b8479c36a1096a339e38c353a7662baa559ba4d879dd4de
+APP_PACKAGE_ID=0x7f0171b76f82cd61ebb4ac3fd502deac6552e9becd38be28d5692b69b5fdb54e
+
 # update seal_config.yaml with APP_PACKAGE_ID inside the enclave
 
-# in the enclave: build, run and expose
-make build ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
+# configure ec2 instance for enclave, see main guide for more details: UsingNautilus.md
 
-# record the pcrs 
+# ssh in the ec2 instance containing the repo on configured diff: docker build, run and expose
+make ENCLAVE_APP=seal-example && make run && sh expose_enclave.sh
+
+# find the pcrs and set env vars
 cat out/nitro.pcrs
 
-PCR0=974fc964c1602b8346971fd8e3a92ea0d94c1993f2e349f1d2d046d5a6e4b1dc5cba8c08fc3448a05ef87f6ab8447d60
-PCR1=974fc964c1602b8346971fd8e3a92ea0d94c1993f2e349f1d2d046d5a6e4b1dc5cba8c08fc3448a05ef87f6ab8447d60
+PCR0=84db3309c8a06c31c1c0a44701fb6c47766244925d7c1d32d5e6589cbdea23aa1f619cddc62c7368ffe648a07df2feb8
+PCR1=84db3309c8a06c31c1c0a44701fb6c47766244925d7c1d32d5e6589cbdea23aa1f619cddc62c7368ffe648a07df2feb8
 PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
 
 # populate name and url
@@ -115,9 +122,9 @@ sui client call --function update_name --module enclave --package $ENCLAVE_PACKA
 # register the enclave onchain 
 sh register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
 
-# read from output the created enclave obj id and finds its initial shared version. 
-ENCLAVE_OBJECT_ID=0x926b69b1c193ceb8ce4df0938c9d9f16fc9f4812abb7e8a9fac386d773ff91e1
-ENCLAVE_OBJ_VERSION=658809575
+# read from output the created enclave obj id and finds its initial shared version 
+ENCLAVE_OBJECT_ID=0x9b8bc44069abc9843bbd2f54b4e7732136cc7c615c34959f98ab2f7c74f002bd
+ENCLAVE_OBJ_VERSION=722158400
 ```
 
 Currently, the enclave is running but has no `SEAL_API_KEY` and cannot process requests. 
@@ -136,6 +143,7 @@ This command looks up the public keys of the specified key servers ID using publ
 
 ```bash
 # in seal repo
+# set package id from step 0
 APP_PACKAGE_ID=0x2080f9c370ddb22c48d6377f8aa64883c3a1c61d3febbcc18b6bf70553ae45a0
 cargo run --bin seal-cli encrypt --secret 303435613237383132646265343536333932393133323233323231333036 \
     --id 0x00 \
@@ -168,6 +176,7 @@ This step is done in the host that the enclave runs in, that can communicate to 
 In this call, the enclave creates a certificate (signed by the wallet) and constructs a PTB calling `seal_approve`. The enclave ephemeral keypair signs an intent message of the wallet public key. A session key signs the request and returns the encoded FetchKeyRequest.
 
 ```bash
+# use ENCLAVE_OBJECT_ID and ENCLAVE_OBJ_VERSION from step 0
 curl -X POST http://localhost:3001/admin/init_seal_key_load \
   -H 'Content-Type: application/json' \
   -d '{"enclave_object_id": "'$ENCLAVE_OBJECT_ID'", "initial_shared_version": '$ENCLAVE_OBJ_VERSION'}'
@@ -179,7 +188,6 @@ curl -X POST http://localhost:3001/admin/init_seal_key_load \
 ### Step 3: Fetch Keys from Seal Servers
 
 The Seal CLI command can be run in the root of [Seal repo](https://github.com/MystenLabs/seal). This can be done anywhere with any Internet connection. Replace `<FETCH_KEY_REQUEST>` with the output from Step 2.
-
 
 This command parses the Hex encoded BCS serialized `FetchKeyRequest` and fetches keys from the specified key server objects for the given network. Each key server verifies the PTB and signature, then returns encrypted key shares (encrypted to enclave's ephemeral ElGamal key) if the Seal policy is satisfied. The CLI gathers all responses and return a Hex encoded value containing a list of Seal object IDs and its server responses.
 
@@ -202,7 +210,6 @@ Encoded seal responses:
 ### Step 4: Complete Key Load
 
 This step is done in the host that the enclave runs in, that can communicate to the enclave via 3001. If it returns OK, the enclave decrypts and caches the Seal keys in memory. Replace `<ENCODED_SEAL_RESPONSES>` with the output from Step 3.
-
 
 ```bash
 curl -X POST http://localhost:3001/admin/complete_seal_key_load \
