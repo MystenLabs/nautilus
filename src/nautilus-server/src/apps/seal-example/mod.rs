@@ -4,20 +4,30 @@
 pub mod endpoints;
 pub mod types;
 
-pub use endpoints::{complete_parameter_load, init_parameter_load};
+pub use endpoints::{complete_seal_key_load, init_seal_key_load, provision_weather_api_key};
 pub use types::*;
 
 use crate::app::endpoints::SEAL_API_KEY;
 use crate::common::IntentMessage;
-use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
+use crate::common::{to_signed_response, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::sync::Arc;
 use tracing::info;
+
+/// Intent scope enum for your application. Each intent message signed by the enclave ephemeral key
+/// should have its own intent scope.
+#[derive(Serialize_repr, Deserialize_repr, Debug)]
+#[repr(u8)]
+pub enum IntentScope {
+    ProcessData = 0,
+    WalletPK = 1,
+}
 /// Inner type T for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WeatherResponse {
@@ -39,7 +49,7 @@ pub async fn process_data(
     let api_key_guard = SEAL_API_KEY.read().await;
     let api_key = api_key_guard.as_ref().ok_or_else(|| {
         EnclaveError::GenericError(
-            "API key not initialized. Please complete parameter load first.".to_string(),
+            "API key not initialized. Please complete key load first.".to_string(),
         )
     })?;
 
@@ -76,7 +86,7 @@ pub async fn process_data(
             temperature,
         },
         last_updated_timestamp_ms,
-        IntentScope::ProcessData,
+        IntentScope::ProcessData as u8,
     )))
 }
 
@@ -105,10 +115,14 @@ pub async fn ping() -> Json<PingResponse> {
 pub async fn spawn_host_init_server(state: Arc<AppState>) -> Result<(), EnclaveError> {
     let host_app = Router::new()
         .route("/ping", get(ping))
-        .route("/seal/init_parameter_load", post(init_parameter_load))
+        .route("/admin/init_seal_key_load", post(init_seal_key_load))
         .route(
-            "/seal/complete_parameter_load",
-            post(complete_parameter_load),
+            "/admin/complete_seal_key_load",
+            post(complete_seal_key_load),
+        )
+        .route(
+            "/admin/provision_weather_api_key",
+            post(provision_weather_api_key),
         )
         .with_state(state);
 
@@ -144,7 +158,7 @@ mod test {
             temperature: 13,
         };
         let timestamp = 1744038900000;
-        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::ProcessData);
+        let intent_msg = IntentMessage::new(payload, timestamp, IntentScope::ProcessData as u8);
         let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
         assert!(
             signing_payload

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::IntentMessage;
-use crate::common::{to_signed_response, IntentScope, ProcessDataRequest, ProcessedDataResponse};
+use crate::common::{to_signed_response, ProcessDataRequest, ProcessedDataResponse};
 use crate::AppState;
 use crate::EnclaveError;
 use axum::extract::State;
@@ -10,12 +10,22 @@ use axum::Json;
 use fastcrypto::encoding::{Encoding, Hex};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::sync::Arc;
 use tracing::info;
-/// ====
+
+/// ====================================================
 /// Core Nautilus server logic, replace it with your own
 /// relavant structs and process_data endpoint.
-/// ====
+/// ====================================================
+/// Intent scope enum for your application. Each intent message signed by the enclave ephemeral key
+/// should have its own intent scope.
+#[derive(Serialize_repr, Deserialize_repr, Debug)]
+#[repr(u8)]
+pub enum IntentScope {
+    ProcessData = 0,
+}
+
 /// Inner type for IntentMessage<T>
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserData {
@@ -49,7 +59,7 @@ pub async fn process_data(
             sui_address: sui_address.clone(),
         },
         current_timestamp,
-        IntentScope::ProcessData,
+        IntentScope::ProcessData as u8,
     )))
 }
 
@@ -198,7 +208,7 @@ mod test {
                 .unwrap(),
             },
             1743989326143,
-            IntentScope::ProcessData,
+            IntentScope::ProcessData as u8,
         );
         let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
         assert!(signing_payload == Hex::decode("003f41dd0d960100000c6d797374656e696e7465726e20101ce8865558e08408b83f60ee9e78843d03d547c850cbe12cb599e17833dd3e").unwrap());

@@ -12,8 +12,6 @@ use nsm_api::driver;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use serde_repr::Deserialize_repr;
-use serde_repr::Serialize_repr;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -24,23 +22,16 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 /// ==== COMMON TYPES ====
 /// Intent message wrapper struct containing the intent scope and timestamp.
 /// This standardizes the serialized payload for signing.
-#[derive(Debug, Serialize, Deserialize)]
+/// Generic over the data type T. Intent scope is stored as u8.
+#[derive(Serialize, Deserialize)]
 pub struct IntentMessage<T: Serialize> {
-    pub intent: IntentScope,
+    pub intent: u8,
     pub timestamp_ms: u64,
     pub data: T,
 }
 
-/// Intent scope enum. Add new scope here if needed, each corresponds to a
-/// scope for signing. Replace in with your own intent per message type being signed by the enclave.
-#[derive(Serialize_repr, Deserialize_repr, Debug)]
-#[repr(u8)]
-pub enum IntentScope {
-    ProcessData = 0,
-}
-
-impl<T: Serialize + Debug> IntentMessage<T> {
-    pub fn new(data: T, timestamp_ms: u64, intent: IntentScope) -> Self {
+impl<T: Serialize> IntentMessage<T> {
+    pub fn new(data: T, timestamp_ms: u64, intent: u8) -> Self {
         Self {
             data,
             timestamp_ms,
@@ -67,13 +58,9 @@ pub fn to_signed_response<T: Serialize + Clone>(
     kp: &Ed25519KeyPair,
     payload: T,
     timestamp_ms: u64,
-    intent: IntentScope,
+    intent: u8,
 ) -> ProcessedDataResponse<IntentMessage<T>> {
-    let intent_msg = IntentMessage {
-        intent,
-        timestamp_ms,
-        data: payload.clone(),
-    };
+    let intent_msg = IntentMessage::new(payload.clone(), timestamp_ms, intent);
 
     let signing_payload = bcs::to_bytes(&intent_msg).expect("should not fail");
     let sig = kp.sign(&signing_payload);
