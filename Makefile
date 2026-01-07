@@ -9,9 +9,11 @@ out:
 
 out/nitro.eif: $(shell git ls-files src) | out
 	docker build \
+		--pull \
 		--tag $(REGISTRY)/enclaveos \
 		--progress=plain \
 		--platform linux/amd64 \
+		--provenance=false \
 		--output type=local,rewrite-timestamp=true,dest=out\
 		-f Containerfile \
 		--build-arg ENCLAVE_APP=$(ENCLAVE_APP) \
