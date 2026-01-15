@@ -14,16 +14,16 @@ module seal_policy_example::seal_policy {
         pk: vector<u8>,
     }
 
-    /// Seal approve policy that checks: 
-    /// 1) The ID used to derive Seal key is always vector[0]. 
-    /// 2) The sender matches the wallet PK hash. 
-    /// 3) The signature is verified against the enclave's registered ephemeral pk and its payload 
+    /// Seal approve policy that checks:
+    /// 1) The ID used to derive Seal key is always vector[0].
+    /// 2) The sender matches the wallet PK hash.
+    /// 3) The signature is verified against the enclave's registered ephemeral pk and its payload
     /// (the bcs bytes of the intent message of the wallet PK and the timestamp).
-    /// 
-    /// In this example policy, whether the enclave is the latest version is not checked. One may 
-    /// pass EnclaveConfig as an argument and check config_version if needed. In addition, the 
+    ///
+    /// In this example policy, whether the enclave is the latest version is not checked. One may
+    /// pass EnclaveConfig as an argument and check config_version if needed. In addition, the
     /// timestamp is not checked, since it's already checked during Seal session key validation. One
-    /// may add additional checks against the clock object. 
+    /// may add additional checks against the clock object.
     entry fun seal_approve(
         id: vector<u8>,
         signature: vector<u8>,
@@ -31,7 +31,7 @@ module seal_policy_example::seal_policy {
         timestamp: u64,
         enclave: &Enclave<WEATHER>,
         ctx: &TxContext,
-    ) {       
+    ) {
         assert!(id == vector[0u8], ENoAccess);
         assert!(ctx.sender().to_bytes() == pk_to_address(&wallet_pk), ENoAccess);
 
@@ -46,7 +46,7 @@ module seal_policy_example::seal_policy {
         assert!(ed25519::ed25519_verify(&signature, enclave.pk(), &payload), ENoAccess);
     }
 
-    /// Helper function to check the address derived from a public key. Assume ed25519 flag for 
+    /// Helper function to check the address derived from a public key. Assume ed25519 flag for
     /// enclave's ephemeral key and a Sui address is derived as blake2b_hash(flag || pk).
     fun pk_to_address(pk: &vector<u8>): vector<u8> {
         let mut arr = vector[0u8];
@@ -64,8 +64,8 @@ module seal_policy_example::seal_policy {
 
     #[test]
     fun test_serde() {
-        // A consistency test for intent message serialization with Rust, using test data by running 
-        // Nautilus server locally logged timestamp, wallet pk and serialized signing bytes. 
+        // A consistency test for intent message serialization with Rust, using test data by running
+        // Nautilus server locally logged timestamp, wallet pk and serialized signing bytes.
         let intent_msg = create_intent_message(
             WalletPKIntent,
             1767627884584,

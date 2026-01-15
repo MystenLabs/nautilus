@@ -22,25 +22,17 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # Versions of `ring` prior to 0.17 are unmaintained
-    "RUSTSEC-2025-0010",
-    # AES functions in `ring` may panic when overflow checking is enabled
-    "RUSTSEC-2025-0009",
     # serde_cbor is not maintained but aws-nitro-enclaves-nsm-api depends 
     # on this, this is not used directly
     "RUSTSEC-2021-0127",
-        "RUSTSEC-2023-0071",
-    # allow unmaintained proc-macro-error used in transitive dependencies (also in Sui)
-    "RUSTSEC-2024-0370",
-    # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*, also in Sui)
-    "RUSTSEC-2024-0384",
-    # allow outdated 'idna' until passkey-client crate is able to update (also in Sui)
-    "RUSTSEC-2024-0421",
+    "RUSTSEC-2023-0071",
     # allow unmaintained derivative crate used in transitive dependencies (paste, ark-*, also in Sui)
     "RUSTSEC-2024-0388",
     "RUSTSEC-2024-0436",
     # allow unmaintained rustls-pemfile
-    "RUSTSEC-2025-0134"
+    "RUSTSEC-2025-0134",
+    # allow unmaintained bincode
+    "RUSTSEC-2025-0141"
 ]
 
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
@@ -65,15 +57,11 @@ allow = [
     "MIT",
     "BSD-3-Clause",
     "Apache-2.0",
-    "MPL-2.0",
     "ISC",
-    "0BSD",
-    "LicenseRef-ring",
     "Unlicense",
     "BSL-1.0",
     "Unicode-3.0",
     #"Apache-2.0 WITH LLVM-exception",
-    "Zlib",
     "CC0-1.0"
 ]
 # The confidence threshold for detecting a license from license text.
