@@ -23,7 +23,7 @@ anyhow = "1.0"
 serde_yaml = "0.9.34"
 tower-http = { version = "0.6.0", features = ["cors"] }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d1fcb853196c3de7888ed8fad74f419b8c8fbe3b", features = ["aes"] }
-nsm_api = { version = "0.5.2", package = "aws-nitro-enclaves-nsm-api" }
+nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev = "8ec7eac72bbb2097f1058ee32c13e1ff232f13e8", package="aws-nitro-enclaves-nsm-api", optional = false }
 bcs = "0.1.6"
 lazy_static = "1.4"
 uuid = { version = "1.0", features = ["v4"] }

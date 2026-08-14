@@ -1,0 +1,44 @@
+name: Enclave image
+
+# rust.yml compiles nautilus-server with a rustup toolchain, but the enclave image
+# is built with the stagex core-rust pinned in the Containerfile -- a *different*
+# compiler. This job builds the actual EIF, so a dependency MSRV bump (or any
+# Containerfile/toolchain change) that the image build cannot satisfy fails here
+# instead of silently at deploy time. It needs no Nitro hardware: the EIF is a
+# plain reproducible `docker build`, and ubuntu-latest is amd64 so the
+# --platform linux/amd64 build is native.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Containerfile'
+      - 'Makefile'
+      - 'src/**'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproducible-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The toolchain images plus the built EIF need more than the default free
+      # space, so drop the preinstalled SDKs the build never touches.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Build the enclave image
+        run: make ENCLAVE_APP=weather-example
+
+      - name: Show the measurements
+        run: cat out/nitro.pcrs
