@@ -144,6 +144,18 @@ public fun pk<T>(enclave: &Enclave<T>): &vector<u8> {
     &enclave.pk
 }
 
+/// The config version this enclave registered against. Compare with
+/// `EnclaveConfig::version` to tell whether the PCRs have rotated since.
+public fun config_version<T>(enclave: &Enclave<T>): u64 {
+    enclave.config_version
+}
+
+/// Incremented by every `update_pcrs`. An enclave whose `config_version` is
+/// behind this registered against PCRs that are no longer expected.
+public fun version<T>(config: &EnclaveConfig<T>): u64 {
+    config.version
+}
+
 public fun destroy_old_enclave<T>(e: Enclave<T>, config: &EnclaveConfig<T>) {
     assert!(e.config_version < config.version, EInvalidConfigVersion);
     let Enclave { id, .. } = e;
