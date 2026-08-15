@@ -1,0 +1,64 @@
+FROM alpine:3.20 AS builder
+
+RUN apk add --no-cache \
+    linux-virt linux-virt-dev \
+    build-base \
+    elfutils-dev \
+    perl \
+    kmod \
+    wget \
+    xz
+
+# The key: use Alpine's pre-built fuse.ko (from linux-virt package)
+# and build cuse.ko against the installed kernel's build directory.
+# This ensures CRCs match exactly.
+
+# First, extract Alpine's fuse.ko (it's gzip compressed)
+RUN KVER=$(ls /lib/modules/) && \
+    gunzip -c /lib/modules/$KVER/kernel/fs/fuse/fuse.ko.gz > /tmp/fuse-alpine.ko && \
+    modinfo /tmp/fuse-alpine.ko | head -5
+
+# Download just the cuse source from matching kernel version
+RUN wget -q "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.129.tar.xz" -O /tmp/linux.tar.xz && \
+    mkdir /tmp/fuse-src && \
+    tar xf /tmp/linux.tar.xz --strip-components=1 -C /tmp/fuse-src linux-6.6.129/fs/fuse/
+
+# Build cuse.ko against the installed kernel build dir
+# We need to build the whole fuse directory since cuse depends on fuse internals
+RUN KVER=$(ls /lib/modules/) && \
+    KBUILD=/lib/modules/$KVER/build && \
+    cd /tmp/fuse-src/fs/fuse && \
+    echo "=== Kernel build dir ===" && \
+    echo $KBUILD && \
+    echo "=== Checking config ===" && \
+    grep -E 'FUSE|CUSE' $KBUILD/.config && \
+    # Create a modified Kconfig to enable CUSE
+    # Since the installed kernel config has CUSE disabled,
+    # we need to temporarily override it
+    cp $KBUILD/.config /tmp/backup-config && \
+    sed -i 's/# CONFIG_CUSE is not set/CONFIG_CUSE=m/' $KBUILD/.config && \
+    # Also update auto.conf so the build system sees CONFIG_CUSE=m
+    echo "CONFIG_CUSE=m" >> $KBUILD/include/config/auto.conf && \
+    echo "#define CONFIG_CUSE_MODULE 1" >> $KBUILD/include/generated/autoconf.h && \
+    echo "=== Modified config ===" && \
+    grep -E 'FUSE|CUSE' $KBUILD/.config && \
+    # Build fuse modules against the kernel build dir
+    make -C $KBUILD M=$(pwd) modules 2>&1 | tail -15 && \
+    ls -la *.ko && \
+    echo "=== Module info ===" && \
+    modinfo cuse.ko | head -10 && \
+    modinfo fuse.ko | head -10 && \
+    # Restore original config
+    cp /tmp/backup-config $KBUILD/.config
+
+# Compare CRCs: our fuse vs Alpine's fuse
+RUN modinfo /tmp/fuse-alpine.ko | grep vermagic && \
+    modinfo /tmp/fuse-src/fs/fuse/fuse.ko | grep vermagic
+
+RUN mkdir /out && \
+    cp /tmp/fuse-alpine.ko /out/fuse.ko && \
+    strip --strip-debug /tmp/fuse-src/fs/fuse/cuse.ko -o /out/cuse.ko && \
+    ls -la /out/*.ko
+
+FROM scratch
+COPY --from=builder /out/ /

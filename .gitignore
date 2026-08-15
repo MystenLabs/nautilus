@@ -8,5 +8,9 @@ secrets-policy.json
 
 /src/nautilus-server/target
 
+/tools/mock-nsm/target
+/tools/nautilus-local/target
+/tools/nautilus-local/kernel-out
+
 /out
 /target
